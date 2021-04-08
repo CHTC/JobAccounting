@@ -1,2 +1,3 @@
 from .BaseFormatter import BaseFormatter
 from .OsgScheddCpuFormatter import OsgScheddCpuFormatter
+from .OsgScheddCpuRemovedFormatter import OsgScheddCpuRemovedFormatter

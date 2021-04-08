@@ -1,2 +1,3 @@
 from .BaseFilter import BaseFilter
 from .OsgScheddCpuFilter import OsgScheddCpuFilter
+from .OsgScheddCpuRemovedFilter import OsgScheddCpuRemovedFilter
