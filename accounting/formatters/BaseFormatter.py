@@ -34,7 +34,8 @@ DEFAULT_STYLES = {
         ],
     "table": [
         "font-size: 10pt",
-        "border: 1px solid black",
+        "border-collapse: collapse",
+        "border-color: #ffffff",
         ],
     "tr.odd": ["background-color: #fee"],
     "tr.even": ["background-color: #fff"],
