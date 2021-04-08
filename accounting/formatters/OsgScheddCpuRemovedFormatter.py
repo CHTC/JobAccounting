@@ -10,7 +10,7 @@ def hhmm(hours):
     return f"{h:02d}:{m:02d}"
 
 
-class OsgScheddCpuFormatter(BaseFormatter):
+class OsgScheddCpuRemovedFormatter(BaseFormatter):
 
     def get_table_title(self, table_file, report_period, start_ts, end_ts):
         info = self.parse_table_filename(table_file)

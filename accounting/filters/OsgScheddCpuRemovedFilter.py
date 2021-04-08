@@ -64,7 +64,7 @@ DEFAULT_FILTER_ATTRS = [
 ]
 
 
-class OsgScheddCpuFilter(BaseFilter):
+class OsgScheddCpuRemovedFilter(BaseFilter):
     name = "OSG schedd job history"
     
     def __init__(self, **kwargs):
