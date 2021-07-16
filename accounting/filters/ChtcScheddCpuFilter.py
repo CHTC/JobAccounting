@@ -495,7 +495,7 @@ class ChtcScheddCpuFilter(BaseFilter):
         else:
             row["% Good CPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
-            row["% Ckpt Able"] = row["Num Ckpt Able Jobs"] / row["Num Uniq Job Ids"]
+            row["% Ckpt Able"] = 100 * row["Num Ckpt Able Jobs"] / row["Num Uniq Job Ids"]
             row["Shadw Starts / Job Id"] = row["Num Shadw Starts"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
