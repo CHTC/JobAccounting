@@ -57,6 +57,7 @@ class ChtcScheddCpuFormatter(BaseFormatter):
             "CPU Hours / Bad Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Shadw Starts / Job Id":    lambda x: f"<td>{float(x):.2f}</td>",
             "Exec Atts / Shadw Start":  lambda x: f"<td>{float(x):.3f}</td>",
+            "% Ckpt Able":          lambda x: f"<td>{float(x):.1f}</td>",
             "% Rm'd Jobs":          lambda x: f"<td>{float(x):.1f}</td>",
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs w/>1 Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
@@ -71,7 +72,9 @@ class ChtcScheddCpuFormatter(BaseFormatter):
         custom_items["Num Rm'd Jobs"]    = "Number of jobs that were removed from the queue instead of allowing to complete"
         custom_items["Num Short Jobs"]   = "Number of execution attempts that completed in less than 60 seconds"
         custom_items["Num Jobs w/>1 Exec Att"] = "Number of unique jobs that were executed more than once"
+        custom_items["Num Ckpt Able Jobs"] = "Number of unique jobs that may be checkpointing"
 
+        custom_items["% Ckpt Able"] = "Percent of Num Uniq Job Ids that may be checkpointing"
         custom_items["% Rm'd Jobs"] = "Percent of Num Uniq Job Ids that were removed"
         custom_items["% Short Jobs"] = "Percent of Num Uniq Job Ids that were short jobs"
         custom_items["% Jobs w/>1 Exec Att"] = "Percent of Num Uniq Job Ids that had more than one execution attempt"

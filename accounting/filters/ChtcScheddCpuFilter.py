@@ -8,6 +8,7 @@ DEFAULT_COLUMNS = {
     10: "All CPU Hours",
     20: "% Good CPU Hours",
     40: "Num Uniq Job Ids",
+    45: "% Ckpt Able",
     50: "% Rm'd Jobs",
     60: "% Short Jobs",
     
@@ -45,6 +46,7 @@ DEFAULT_COLUMNS = {
     360: "Num Short Jobs",
     370: "Num Local Univ Jobs",
     380: "Num Sched Univ Jobs",
+    390: "Num Ckpt Able Jobs",
 }
 
 
@@ -96,6 +98,19 @@ class ChtcScheddCpuFilter(BaseFilter):
         o["_NumLocalUnivJobs"].append(univ == 12)
         o["_NoShadow"].append(univ in [7, 12])
 
+        # Count number of checkpointable jobs
+        if univ == 5 and (
+                (
+                    i.get("WhenToTransferOutput", "").upper() == "ON_EXIT_OR_EVICT" and
+                    i.get("Is_resumable", False)
+                ) or (
+                    i.get("SuccessCheckpointExitBySignal", False) or
+                    i.get("SuccessCheckpointExitCode") is not None
+                )):
+            o["_NumCkptJobs"].append(1)
+        else:
+            o["_NumCkptJobs"].append(0)
+
         # Compute badput fields
         if (
                 univ not in [7, 12] and
@@ -140,6 +155,19 @@ class ChtcScheddCpuFilter(BaseFilter):
         o["_NumSchedulerUnivJobs"].append(univ == 7)
         o["_NumLocalUnivJobs"].append(univ == 12)
         o["_NoShadow"].append(univ in [7, 12])
+
+        # Count number of checkpointable jobs
+        if univ == 5 and (
+                (
+                    i.get("WhenToTransferOutput", "").upper() == "ON_EXIT_OR_EVICT" and
+                    i.get("Is_resumable", False)
+                ) or (
+                    i.get("SuccessCheckpointExitBySignal", False) or
+                    i.get("SuccessCheckpointExitCode") is not None
+                )):
+            o["_NumCkptJobs"].append(1)
+        else:
+            o["_NumCkptJobs"].append(0)
 
         # Compute badput fields
         if (
@@ -203,6 +231,19 @@ class ChtcScheddCpuFilter(BaseFilter):
             o["_BadWallClockTime"].append(0)
             o["_NumBadJobStarts"].append(0)
 
+        # Count number of checkpointable jobs
+        if univ == 5 and (
+                (
+                    i.get("WhenToTransferOutput", "").upper() == "ON_EXIT_OR_EVICT" and
+                    i.get("Is_resumable", False)
+                ) or (
+                    i.get("SuccessCheckpointExitBySignal", False) or
+                    i.get("SuccessCheckpointExitCode") is not None
+                )):
+            o["_NumCkptJobs"].append(1)
+        else:
+            o["_NumCkptJobs"].append(0)
+
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
             o[attr].append(i.get(attr, None))
@@ -259,7 +300,7 @@ class ChtcScheddCpuFilter(BaseFilter):
             columns[5] = "Num Users"
         if agg == "Site":
             columns[5] = "Num Users"
-            rm_columns = [20,50,70,80,90,300,305,310,320,330,340,350,370,380]
+            rm_columns = [20,45,50,70,80,90,300,305,310,320,330,340,350,370,380,390]
             [columns.pop(key) for key in rm_columns]
         return columns
             
@@ -446,6 +487,7 @@ class ChtcScheddCpuFilter(BaseFilter):
         row["Num Shadw Starts"] = sum(self.clean(num_shadow_starts))
         row["Num Local Univ Jobs"] = sum(data["_NumLocalUnivJobs"])
         row["Num Sched Univ Jobs"] = sum(data["_NumSchedulerUnivJobs"])
+        row["Num Ckpt Able Jobs"] = sum(data["_NumCkptJobs"])
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
@@ -453,6 +495,7 @@ class ChtcScheddCpuFilter(BaseFilter):
         else:
             row["% Good CPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
+            row["% Ckpt Able"] = row["Num Ckpt Able Jobs"] / row["Num Uniq Job Ids"]
             row["Shadw Starts / Job Id"] = row["Num Shadw Starts"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
