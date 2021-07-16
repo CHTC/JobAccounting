@@ -12,6 +12,8 @@ DEFAULT_COLUMNS = {
     50: "% Jobs w/o Shadw",
     60: "Shadw Starts / Job Id",
     70: "Exec Atts / Shadw Start",
+    75: "Holds / Job Id",
+    76: "% Jobs w/1+ Holds",
     80: "Avg MB Sent",
     81: "Max MB Sent",
     90: "Avg MB Recv",
@@ -25,6 +27,7 @@ DEFAULT_COLUMNS = {
     300: "Rm'd Jobs w/o Shadw Start",
     310: "Num Exec Atts",
     320: "Num Shadw Starts",
+    325: "Num Job Holds",
     330: "Num DAG Node Jobs",
     340: "Num Local Univ Jobs",
     350: "Num Sched Univ Jobs",
@@ -41,17 +44,12 @@ DEFAULT_FILTER_ATTRS = [
     "MemoryUsage",
     "NumJobStarts",
     "NumShadowStarts",
+    "NumHolds",
     "JobUniverse",
     "JobStatus",
     "EnteredCurrentStatus",
     "BytesSent",
     "BytesRecvd",
-
-    # Addded for tracking long running jobs
-    "StartdPrincipal",
-    "StartdName",
-    "GlobalJobId",
-    "MachineAttrMips0",
 ]
 
 
@@ -365,7 +363,9 @@ class OsgScheddCpuRemovedFilter(BaseFilter):
         row["All CPU Hours"]    = sum(self.clean(total_cpu_time)) / 3600
         row["Good CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
-        row["Rm'd Jobs w/o Shadw Start"]= sum([starts in [0, None] for starts in data["NumShadowStarts"]])
+        row["Rm'd Jobs w/o Shadw Start"] = sum([starts in [0, None] for starts in data["NumShadowStarts"]])
+        row["Num Job Holds"]    = sum(self.clean(data["NumHolds"]))
+        row["Num Jobs w/1+ Holds"] = sum([holds > 0 for holds in self.clean(data["NumHolds"])])
         row["Avg MB Sent"]      = stats.mean(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
         row["Max MB Sent"]      = max(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
         row["Avg MB Recv"]      = stats.mean(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
@@ -388,8 +388,12 @@ class OsgScheddCpuRemovedFilter(BaseFilter):
             row["Shadw Starts / Job Id"] = 0
         if row["Num Uniq Job Ids"] > 0:
             row["% Jobs w/o Shadw"] = 100 * (row["Rm'd Jobs w/o Shadw Start"] / row["Num Uniq Job Ids"])
+            row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
+            row["% Jobs w/1+ Holds"] = 100 * row["Num Jobs w/1+ Holds"] / row["Num Uniq Job Ids"]
         else:
             row["% Jobs w/o Shadw"] = 0
+            row["Holds / Job Id"] = 0
+            row["% Jobs w/1+ Holds"] = 0
         if row["Num Shadw Starts"] > 0:
             row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
         else:

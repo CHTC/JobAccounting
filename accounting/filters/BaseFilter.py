@@ -9,7 +9,9 @@ import elasticsearch.helpers
 class BaseFilter:
     name = "job history"
     
-    def __init__(self, **kwargs):
+    def __init__(self, skip_init=False, **kwargs):
+        if skip_init:
+            return
         self.client = self.connect(**kwargs)
         self.data = self.scan_and_filter(**kwargs)
 

@@ -57,9 +57,11 @@ class OsgScheddCpuFormatter(BaseFormatter):
             "CPU Hours / Bad Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Shadw Starts / Job Id":    lambda x: f"<td>{float(x):.2f}</td>",
             "Exec Atts / Shadw Start":  lambda x: f"<td>{float(x):.3f}</td>",
+            "Holds / Job Id":           lambda x: f"<td>{float(x):.2f}</td>",
             "% Rm'd Jobs":          lambda x: f"<td>{float(x):.1f}</td>",
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs w/>1 Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
+            "% Jobs w/1+ Holds":    lambda x: f"<td>{float(x):.1f}</td>",
         }
         rows = super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
         return rows
@@ -75,9 +77,11 @@ class OsgScheddCpuFormatter(BaseFormatter):
         custom_items["% Rm'd Jobs"] = "Percent of Num Uniq Job Ids that were removed"
         custom_items["% Short Jobs"] = "Percent of Num Uniq Job Ids that were short jobs"
         custom_items["% Jobs w/>1 Exec Att"] = "Percent of Num Uniq Job Ids that had more than one execution attempt"
+        custom_items["% Jobs w/1+ Holds"] = "Percent of Num Uniq Job Ids that had one or more jobs go on hold"
 
         custom_items["Shadw Starts / Job Id"]   = "Num Shadw Starts per Num Uniq Job Ids"
         custom_items["Exec Atts / Shadw Start"] = "Num Exec Atts per Num Shadw Starts"
+        custom_items["Holds / Job Id"] = "Num Job Holds per Num Uniq Job Ids"
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
 

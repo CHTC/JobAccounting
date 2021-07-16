@@ -14,8 +14,10 @@ DEFAULT_COLUMNS = {
     
     70: "Shadw Starts / Job Id",
     80: "Exec Atts / Shadw Start",
+    85: "Holds / Job Id",
 
     90: "% Jobs w/>1 Exec Att",
+    95: "% Jobs w/1+ Holds",
 
     110: "Min Hrs",
     120: "25% Hrs",
@@ -40,9 +42,11 @@ DEFAULT_COLUMNS = {
     305: "CPU Hours / Bad Exec Att",
     310: "Num Exec Atts",
     320: "Num Shadw Starts",
+    325: "Num Job Holds",
     330: "Num Rm'd Jobs",
     340: "Num DAG Node Jobs",
     350: "Num Jobs w/>1 Exec Att",
+    355: "Num Jobs w/1+ Holds",
     360: "Num Short Jobs",
     370: "Num Local Univ Jobs",
     380: "Num Sched Univ Jobs",
@@ -59,6 +63,7 @@ DEFAULT_FILTER_ATTRS = [
     "MemoryUsage",
     "NumJobStarts",
     "NumShadowStarts",
+    "NumHolds",
     "JobUniverse",
     "JobStatus",
     "EnteredCurrentStatus",
@@ -322,7 +327,7 @@ class OsgScheddCpuFilter(BaseFilter):
             columns[5] = "Num Users"
         if agg == "Site":
             columns[5] = "Num Users"
-            rm_columns = [20,50,70,80,90,300,305,310,320,330,340,350,370,380]
+            rm_columns = [20,50,70,80,85,90,95,300,305,310,320,325,330,340,350,355,370,380]
             [columns.pop(key) for key in rm_columns]
         return columns
             
@@ -495,6 +500,8 @@ class OsgScheddCpuFilter(BaseFilter):
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
         row["Num DAG Node Jobs"] = sum(data['_NumDAGNodes'])
         row["Num Rm'd Jobs"]    = sum([status == 3 for status in data["JobStatus"]])
+        row["Num Job Holds"]    = sum(self.clean(data["NumHolds"]))
+        row["Num Jobs w/1+ Holds"] = sum([holds > 0 for holds in self.clean(data["NumHolds"])])
         row["Num Jobs w/>1 Exec Att"] = sum([starts > 1 for starts in self.clean(data["NumJobStarts"])])
         row["Avg MB Sent"]      = stats.mean(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
         row["Max MB Sent"]      = max(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
@@ -517,14 +524,18 @@ class OsgScheddCpuFilter(BaseFilter):
             row["% Good CPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
             row["Shadw Starts / Job Id"] = row["Num Shadw Starts"] / row["Num Uniq Job Ids"]
+            row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
             row["% Jobs w/>1 Exec Att"] = 100 * row["Num Jobs w/>1 Exec Att"] / row["Num Uniq Job Ids"]
+            row["% Jobs w/1+ Holds"] = 100 * row["Num Jobs w/1+ Holds"] / row["Num Uniq Job Ids"]
         else:
             row["Shadw Starts / Job Id"] = 0
+            row["Holds / Job Id"] = 0
             row["% Rm'd Jobs"] = 0
             row["% Short Jobs"] = 0
             row["% Jobs w/>1 Exec Att"] = 0
+            row["% Jobs w/1+ Holds"] = 0
         if row["Num Shadw Starts"] > 0:
             row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
         else:
