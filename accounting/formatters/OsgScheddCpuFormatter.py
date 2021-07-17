@@ -44,7 +44,21 @@ class OsgScheddCpuFormatter(BaseFormatter):
             subject_str = f"OSPool Usage Report {start_date} to {end_date}"
         return subject_str
 
-    def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
+    def get_table_html(self, table_file, report_period, start_ts, end_ts, skip_cols=[], **kwargs):
+        skip_cols = [
+            "Good CPU Hours",
+            "Num Exec Atts",
+            "Num Shadw Starts",
+            "Num Job Holds",
+            "Num Rm'd Jobs",
+            "Num DAG Node Jobs",
+            "Num Jobs w/>1 Exec Att",
+            "Num Jobs w/1+ Holds",
+            "Num Short Jobs",
+        ]
+        return super().get_table_html(table_file, report_period, start_ts, end_ts, skip_cols=skip_cols, **kwargs)
+
+    def format_rows(self, header, rows, custom_fmts={}, skip_cols=[], default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
             "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
@@ -63,19 +77,7 @@ class OsgScheddCpuFormatter(BaseFormatter):
             "% Jobs w/>1 Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs w/1+ Holds":    lambda x: f"<td>{float(x):.1f}</td>",
         }
-        skip_cols = [
-            "Good CPU Hours",
-            "Num Exec Atts",
-            "Num Shadw Starts",
-            "Num Job Holds",
-            "Num Rm'd Jobs",
-            "Num DAG Node Jobs",
-            "Num Jobs w/>1 Exec Att",
-            "Num Jobs w/1+ Holds",
-            "Num Short Jobs",
-        ]
-        rows = super().format_rows(header, rows, custom_fmts=custom_fmts, skip_cols=skip_cols, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
-        return rows
+        return super().format_rows(header, rows, custom_fmts=custom_fmts, skip_cols=skip_cols, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
     
     def get_legend(self):
         custom_items = OrderedDict()

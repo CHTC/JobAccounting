@@ -173,12 +173,11 @@ class BaseFormatter:
                     except ValueError:
                         rows[i][j] = default_text_fmt(value)
 
-        header = curr_header
-        return rows
+        return curr_header, rows
     
-    def get_table_html(self, table_file, report_period, start_ts, end_ts, **kwargs):
+    def get_table_html(self, table_file, report_period, start_ts, end_ts, skip_cols=[], **kwargs):
         table_data = self.load_table(table_file)
-        rows = self.format_rows(table_data["header"], table_data["rows"])
+        header, rows = self.format_rows(table_data["header"], table_data["rows"])
 
         rows_html = []
         for i, row in enumerate(rows):
@@ -189,7 +188,7 @@ class BaseFormatter:
         html = f"""
 <h1>{self.get_table_title(table_file, report_period, start_ts, end_ts)}</h1>
 <table>
-  <tr><th>{'</th><th>'.join(table_data['header'])}</th></tr>
+  <tr><th>{'</th><th>'.join(header)}</th></tr>
   {newline.join(rows_html)}
 </table>
 """
