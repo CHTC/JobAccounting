@@ -63,7 +63,18 @@ class OsgScheddCpuFormatter(BaseFormatter):
             "% Jobs w/>1 Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs w/1+ Holds":    lambda x: f"<td>{float(x):.1f}</td>",
         }
-        rows = super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
+        skip_cols = [
+            "Good CPU Hours",
+            "Num Exec Atts",
+            "Num Shadw Starts",
+            "Num Job Holds",
+            "Num Rm'd Jobs",
+            "Num DAG Node Jobs",
+            "Num Jobs w/>1 Exec Att",
+            "Num Jobs w/1+ Holds",
+            "Num Short Jobs",
+        ]
+        rows = super().format_rows(header, rows, custom_fmts=custom_fmts, skip_cols=skip_cols, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
         return rows
     
     def get_legend(self):

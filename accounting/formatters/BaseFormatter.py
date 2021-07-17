@@ -56,9 +56,9 @@ DEFAULT_STYLES = {
 
 DEFAULT_LEGEND = OrderedDict()
 DEFAULT_LEGEND["All CPU Hours"]    = "Total CPU hours for all execution attempts, including preemption and removal"
+DEFAULT_LEGEND["Num Uniq Job Ids"] = "Number of unique job ids across all execution attempts"
 DEFAULT_LEGEND["% Good CPU Hours"] = "Good CPU Hours per All CPU Hours, as a percentage"
 DEFAULT_LEGEND["Good CPU Hours"]   = "Total CPU hours for execution attempts that ran to completion"
-DEFAULT_LEGEND["Num Uniq Job Ids"] = "Number of unique job ids across all execution attempts"
 DEFAULT_LEGEND["Max Rqst Mem MB"]  = "Maximum memory requested across all submitted jobs in MB"
 DEFAULT_LEGEND["Max Used Mem MB"]  = "Maximum measured memory usage across all submitted jobs' last execution attempts in MB"
 DEFAULT_LEGEND["Max Rqst Cpus"]    = "Maximum number of CPUs requested across all submitted jobs"
@@ -118,6 +118,7 @@ class BaseFormatter:
                     header,
                     rows,
                     custom_fmts={},
+                    skip_cols=[],
                     default_text_fmt=None,
                     default_numeric_fmt=None
                         ):
@@ -130,8 +131,18 @@ class BaseFormatter:
 
         rows = rows.copy()
         for i, row in enumerate(rows):
+
+            # pop skipped columns from the right
+            curr_header = header.copy()
+            if len(skip_cols) > 0:
+                for j in range(len(row)-1, -1, -1):
+                    col = header[j]
+                    if col in skip_cols:
+                        row.pop(j)
+                        curr_header.pop(j)
+
             for j, value in enumerate(row):
-                col = header[j]
+                col = curr_header[j]
 
                 # First column (blank header) contains row number
                 # except total row contains total number of rows
