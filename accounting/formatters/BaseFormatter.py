@@ -177,7 +177,7 @@ class BaseFormatter:
     
     def get_table_html(self, table_file, report_period, start_ts, end_ts, skip_cols=[], **kwargs):
         table_data = self.load_table(table_file)
-        header, rows = self.format_rows(table_data["header"], table_data["rows"])
+        header, rows = self.format_rows(table_data["header"], table_data["rows"], skip_rows=skip_rows)
 
         rows_html = []
         for i, row in enumerate(rows):
