@@ -173,6 +173,7 @@ class BaseFormatter:
                     except ValueError:
                         rows[i][j] = default_text_fmt(value)
 
+        header = curr_header
         return rows
     
     def get_table_html(self, table_file, report_period, start_ts, end_ts, **kwargs):
