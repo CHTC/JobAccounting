@@ -112,7 +112,7 @@ class BaseFormatter:
             "header": header,
             "rows": rows,
         }
-        rm_cols(data)
+        self.rm_cols(data)
         return data
 
     def rm_cols(self, data, cols={}):
