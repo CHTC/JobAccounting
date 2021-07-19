@@ -44,6 +44,20 @@ class ChtcScheddCpuRemovedFormatter(BaseFormatter):
             subject_str = f"CHTC Schedd Removed Jobs Report {start_date} to {end_date}"
         return subject_str
 
+    def rm_cols(self, data):
+        cols = {
+            "Good CPU Hours",
+            "Num Exec Atts",
+            "Num Shadw Starts",
+            "Num Job Holds",
+            "Num Rm'd Jobs",
+            "Num DAG Node Jobs",
+            "Num Jobs w/>1 Exec Att",
+            "Num Jobs w/1+ Holds",
+            "Num Short Jobs",
+        }
+        return super().rm_cols(data, cols=cols)
+
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
             "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
