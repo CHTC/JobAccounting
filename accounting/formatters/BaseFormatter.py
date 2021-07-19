@@ -190,7 +190,7 @@ class BaseFormatter:
         html = f"""
 <h1>{self.get_table_title(table_file, report_period, start_ts, end_ts)}</h1>
 <table>
-  <tr><th>{'</th><th>'.join(table_data["header"])}</th></tr>
+  <tr><th>{'</th><th>'.join(table_data['header'])}</th></tr>
   {newline.join(rows_html)}
 </table>
 """
