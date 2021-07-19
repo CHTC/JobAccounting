@@ -112,13 +112,25 @@ class BaseFormatter:
             "header": header,
             "rows": rows,
         }
+        rm_cols(data)
         return data
+
+    def rm_cols(self, data, cols={}):
+        if len(cols) == 0:
+            return
+        idxs = []
+        for i in range(len(data["header"])-1, -1, -1):
+            if data["header"][i] in cols:
+                idxs.append(i)
+                data["header"].pop(i)
+        for row in data["rows"]:
+            for i in idxs:
+                row.pop(i)
 
     def format_rows(self,
                     header,
                     rows,
                     custom_fmts={},
-                    skip_cols=[],
                     default_text_fmt=None,
                     default_numeric_fmt=None
                         ):
@@ -131,18 +143,8 @@ class BaseFormatter:
 
         rows = rows.copy()
         for i, row in enumerate(rows):
-
-            # pop skipped columns from the right
-            curr_header = header.copy()
-            if len(skip_cols) > 0:
-                for j in range(len(row)-1, -1, -1):
-                    col = header[j]
-                    if col in skip_cols:
-                        row.pop(j)
-                        curr_header.pop(j)
-
             for j, value in enumerate(row):
-                col = curr_header[j]
+                col = header[j]
 
                 # First column (blank header) contains row number
                 # except total row contains total number of rows
@@ -173,11 +175,11 @@ class BaseFormatter:
                     except ValueError:
                         rows[i][j] = default_text_fmt(value)
 
-        return curr_header, rows
+        return rows
     
-    def get_table_html(self, table_file, report_period, start_ts, end_ts, skip_cols=[], **kwargs):
+    def get_table_html(self, table_file, report_period, start_ts, end_ts, **kwargs):
         table_data = self.load_table(table_file)
-        header, rows = self.format_rows(table_data["header"], table_data["rows"], skip_cols=skip_cols)
+        rows = self.format_rows(table_data["header"], table_data["rows"])
 
         rows_html = []
         for i, row in enumerate(rows):
@@ -188,7 +190,7 @@ class BaseFormatter:
         html = f"""
 <h1>{self.get_table_title(table_file, report_period, start_ts, end_ts)}</h1>
 <table>
-  <tr><th>{'</th><th>'.join(header)}</th></tr>
+  <tr><th>{'</th><th>'.join(table_data["header"])}</th></tr>
   {newline.join(rows_html)}
 </table>
 """
