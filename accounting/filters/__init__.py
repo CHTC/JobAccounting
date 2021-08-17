@@ -5,3 +5,4 @@ from .OsgScheddCpuRemovedFilter import OsgScheddCpuRemovedFilter
 from .OsgScheddCpuMonthlyFilter import OsgScheddCpuMonthlyFilter
 from .ChtcScheddCpuFilter import ChtcScheddCpuFilter
 from .ChtcScheddCpuRemovedFilter import ChtcScheddCpuRemovedFilter
+from .ChtcScheddGpuFilter import ChtcScheddGpuFilter

@@ -4,3 +4,4 @@ from .OsgScheddCpuHeldFormatter import OsgScheddCpuHeldFormatter
 from .OsgScheddCpuRemovedFormatter import OsgScheddCpuRemovedFormatter
 from .ChtcScheddCpuFormatter import ChtcScheddCpuFormatter
 from .ChtcScheddCpuRemovedFormatter import ChtcScheddCpuRemovedFormatter
+from .ChtcScheddGpuFormatter import ChtcScheddGpuFormatter
