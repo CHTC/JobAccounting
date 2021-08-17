@@ -522,7 +522,7 @@ class ChtcScheddGpuFilter(BaseFilter):
         row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
         row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
         row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
-        row["Max Rqst Cpus"]    = max(self.clean(data["RequestGpus"], allow_empty_list=False))
+        row["Max Rqst Gpus"]    = max(self.clean(data["RequestGpus"], allow_empty_list=False))
         row["Num Exec Atts"]    = sum(self.clean(num_exec_attempts))
         row["Num Shadw Starts"] = sum(self.clean(num_shadow_starts))
         row["Num Ckpt Able Jobs"] = sum(data["_NumCkptJobs"])
