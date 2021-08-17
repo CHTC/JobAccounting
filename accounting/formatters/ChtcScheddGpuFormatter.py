@@ -73,6 +73,7 @@ class ChtcScheddGpuFormatter(BaseFormatter):
             "GPU Hours / Bad Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Shadw Starts / Job Id":    lambda x: f"<td>{float(x):.2f}</td>",
             "Exec Atts / Shadw Start":  lambda x: f"<td>{float(x):.3f}</td>",
+            "% Good GPU Hours":     lambda x: f"<td>{float(x):.1f}</td>",
             "% Ckpt Able":          lambda x: f"<td>{float(x):.1f}</td>",
             "% Rm'd Jobs":          lambda x: f"<td>{float(x):.1f}</td>",
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
