@@ -184,6 +184,9 @@ class OsgScheddLongJobFilter(BaseFilter):
         if len(o["CommittedTime"]) > 0 and i.get("CommittedTime", 0) < o["CommittedTime"][0]:
             return
 
+        # Get list of attrs
+        filter_attrs = DEFAULT_FILTER_ATTRS.copy()
+
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
             # Use UNKNOWN for missing or blank ProjectName and ScheddName
