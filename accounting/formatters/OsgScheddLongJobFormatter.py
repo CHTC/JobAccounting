@@ -68,7 +68,7 @@ class OsgScheddLongJobFormatter(BaseFormatter):
             "Actual CPU Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "% CPU Eff":    lambda x: f"<td>{float(x):.1f}</td>",
             "CPUs Used":    lambda x: f"<td>{float(x):.3f}</td>",
-            "Job Id":       lambda x: f'<td class="text">x</td>',
+            "Job Id":       lambda x: f'<td class="text">{x}</td>',
             "Last Wrkr Node": lambda x: f'<td class="text">{break_hyphens(x)}</td>',
         }
         return super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
