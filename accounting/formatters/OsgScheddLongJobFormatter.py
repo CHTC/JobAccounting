@@ -78,7 +78,7 @@ class OsgScheddLongJobFormatter(BaseFormatter):
         for i, row in enumerate(rows):
             if i == 0:
                 continue
-            row[0] = default_numeric_fmt(i)
+            row[0] = f"<td>{int(i):,}</td>"
 
         return rows
 
