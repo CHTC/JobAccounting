@@ -189,7 +189,7 @@ class OsgScheddLongJobFilter(BaseFilter):
 
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
-            if attr not in o or len(o[attr][0]) == 0:
+            if attr not in o:
                 o[attr].append(None)
 
             # Use UNKNOWN for missing or blank ProjectName and ScheddName
