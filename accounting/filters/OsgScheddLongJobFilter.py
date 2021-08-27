@@ -204,6 +204,9 @@ class OsgScheddLongJobFilter(BaseFilter):
             else:
                 o[attr][0] = i.get(attr, None)
 
+        if "_NumJobs" not in o:
+            o["_NumJobs"] = [1]
+
     def get_filters(self):
         # Add all filter methods to a list
         filters = [
@@ -233,17 +236,17 @@ class OsgScheddLongJobFilter(BaseFilter):
         row["Actual CPU Hrs"] = data["CPUsUsage"][0] * row["Last Wall Hrs"]
         row["% CPU Eff"] = 100 * data["CPUsUsage"][0] / data["RequestCpus"][0]
 
-        row["JobId"] = data["GlobalJobId"][0].split("#")[1]
+        row["Job Id"] = data["GlobalJobId"][0].split("#")[1]
         row["Access Point"] = data["ScheddName"][0]
         row["Project"] = data["ProjectName"][0]
 
         row["Last Site"] = data["MATCH_EXP_JOBGLIDEIN_ResourceName"][0]
         row["Last Wrkr Node"] = data["LastRemoteHost"][0].split("@")[-1]
-        row["Last Wrkr MIPS"] = data["MachineAttrMips0"][0] or "-"
+        row["Last Wrkr MIPS"] = data["MachineAttrMips0"][0] or "n/a"
 
-        row["Num Exec Atts"] = data["NumJobStarts"][0]
-        row["Num Shadw Starts"] = data["NumShadowStarts"][0]
-        row["Num Holds"] = data["NumHolds"][0]
+        row["Num Exec Atts"] = data["NumJobStarts"][0] or 0
+        row["Num Shadw Starts"] = data["NumShadowStarts"][0] or 0
+        row["Num Holds"] = data["NumHolds"][0] or 0
 
         row["Rqst Cpus"] = data["RequestCpus"][0]
         row["CPUs Used"] = data["CPUsUsage"][0]

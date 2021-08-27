@@ -9,7 +9,14 @@ def hhmm(hours):
     # Convert float hours to HH:MM
     h = int(hours)
     m = int(60 * (float(hours) - int(hours)))
-    return f"{h:02d}:{m:02d}"
+    return f"{h:01d}:{m:02d}"
+
+def break_hyphens(s):
+    # Break after [@_.-]
+    zero_width_space = "&#8203;"
+    for char in ["@", "_", "."]:
+        s = s.replace(char, f"{char}{zero_width_space}")
+    return s
 
 
 class OsgScheddLongJobFormatter(BaseFormatter):
@@ -61,6 +68,8 @@ class OsgScheddLongJobFormatter(BaseFormatter):
             "Actual CPU Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "% CPU Eff":    lambda x: f"<td>{float(x):.1f}</td>",
             "CPUs Used":    lambda x: f"<td>{float(x):.3f}</td>",
+            "Job Id":       lambda x: f'<td class="text">{break_chars(x)}</td>'
+            "Last Wrkr Node": lambda x: f'<td class="text">{break_hyphens(x)}</td>'
         }
         return super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
 
