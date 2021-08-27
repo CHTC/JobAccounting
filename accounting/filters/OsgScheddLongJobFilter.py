@@ -1,6 +1,7 @@
 import logging
 import htcondor
 from pathlib import Path
+from collections import defaultdict
 from .BaseFilter import BaseFilter
 
 
