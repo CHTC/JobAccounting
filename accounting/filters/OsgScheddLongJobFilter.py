@@ -89,7 +89,7 @@ class OsgScheddLongJobFilter(BaseFilter):
                                 "CommittedTime": {
                                     "gt": 3*60*60
                                 }
-                            }}
+                            }},
                             {"term": {
                                 "JobUniverse": {
                                 "value": 5,
