@@ -14,7 +14,7 @@ def hhmm(hours):
 def break_hyphens(s):
     # Break after [@_.-]
     zero_width_space = "&#8203;"
-    for char in ["@", "_", "."]:
+    for char in ["@", "_", ".", "-"]:
         s = s.replace(char, f"{char}{zero_width_space}")
     return s
 
@@ -69,9 +69,18 @@ class OsgScheddLongJobFormatter(BaseFormatter):
             "% CPU Eff":    lambda x: f"<td>{float(x):.1f}</td>",
             "CPUs Used":    lambda x: f"<td>{float(x):.3f}</td>",
             "Job Id":       lambda x: f'<td class="text">{x}</td>',
+            "Last Site":      lambda x: f'<td class="text">{break_hyphens(x)}</td>',
             "Last Wrkr Node": lambda x: f'<td class="text">{break_hyphens(x)}</td>',
         }
-        return super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
+
+        rows = super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
+
+        for i, row in enumerate(rows):
+            if i == 0:
+                continue
+            row[0] = default_numeric_fmt(i)
+
+        return rows
 
     def get_legend(self, custom_items=OrderedDict()):
         legend_items = custom_items
