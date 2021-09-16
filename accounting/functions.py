@@ -87,7 +87,7 @@ def write_csv(table, filter_name, table_name, start_ts, report_period, csv_dir, 
     return filepath
 
 
-def send_email(subject, from_addr, to_addrs, cc_addrs, bcc_addrs, html, table_files, **kwargs):
+def send_email(subject, from_addr, to_addrs, cc_addrs, bcc_addrs, reply_to_addr, html, table_files, **kwargs):
     if len(to_addrs) == 0:
         logging.error("No recipients in the To: field, not sending email")
         return
@@ -99,6 +99,8 @@ def send_email(subject, from_addr, to_addrs, cc_addrs, bcc_addrs, html, table_fi
         msg["Cc"] = ", ".join(cc_addrs)
     if len(bcc_addrs) > 0:
         msg["Bcc"] = ", ".join(bcc_addrs)
+    if reply_to_addr is not None:
+        msg["Reply-To"] = reply_to_addr
     msg["Subject"] = subject
 
     msg.attach(MIMEText(html, "html"))

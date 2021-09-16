@@ -122,6 +122,12 @@ def parse_args(args_in=sys.argv[1:]):
         default=[x.strip() for x in os.environ.get("BCC_ADDRS", "").split(",") if x != ""],
         help="BCC: email address (can be specified multiple times)",
     )
+    parser.add_argument(
+        "--reply_to_addr",
+        metavar="REPLY_TO_ADDR",
+        dest="reply_to_addr",
+        help="Reply-To: email address",
+    )
     args = parser.parse_args(args_in)
 
     # Get filter and formatter classes
