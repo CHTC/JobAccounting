@@ -166,9 +166,12 @@ class BaseFormatter:
                 # in fmts), otherwise it's a string
                 if col in fmts:
                     try:
-                        rows[i][j] = fmts[col](float(value))
+                        rows[i][j] = fmts[col](value)
                     except ValueError:
-                        rows[i][j] = default_text_fmt(value)
+                        try:
+                            rows[i][j] = fmts[col](float(value))
+                        except ValueError:
+                            rows[i][j] = default_text_fmt(value)
                 else:
                     try:
                         rows[i][j] = default_numeric_fmt(float(value))
