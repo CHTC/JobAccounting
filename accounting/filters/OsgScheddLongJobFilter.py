@@ -8,6 +8,7 @@ from .BaseFilter import BaseFilter
 
 
 DEFAULT_COLUMNS = {
+    5 : "Project",
     10: "All CPU Hours", # "Last Wall Hrs",
     20: "Total Wall Hrs",
     30: "Potent CPU Hrs",
@@ -229,6 +230,7 @@ class OsgScheddLongJobFilter(BaseFilter):
     def compute_custom_columns(self, data, agg, agg_name):
         # Output dictionary
         row = {}
+        row["Project"] = data["ProjectName"]
 
         row["Last Wall Hrs"] = data["CommittedTime"][0] / 3600
         row["Total Wall Hrs"] = data["RemoteWallClockTime"][0] / 3600
