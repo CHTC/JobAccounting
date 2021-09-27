@@ -78,6 +78,13 @@ class OsgScheddCpuFormatter(BaseFormatter):
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs w/>1 Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs w/1+ Holds":    lambda x: f"<td>{float(x):.1f}</td>",
+            "Input Files Xferd / Exec Att":  lambda x: f"<td>{float(x):.1f}</td>",
+            "Input MB Xferd / Exec Att":     lambda x: f"<td>{float(x):.1f}</td>",
+            "Input MB / File":               lambda x: f"<td>{float(x):.1f}</td>",
+            "Output Files Xferd / Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
+            "Output MB Xferd / Exec Att":    lambda x: f"<td>{float(x):.1f}</td>",
+            "Output MB / File":              lambda x: f"<td>{float(x):.1f}</td>",
+            
         }
         return super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
     
