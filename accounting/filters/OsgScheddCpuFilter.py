@@ -33,6 +33,13 @@ DEFAULT_COLUMNS = {
     190: "Avg MB Recv",
     191: "Max MB Recv",
 
+    180: "Input Files Xferd / Exec Att",
+    181: "Input MB Xferd / Exec Att",
+    182: "Input MB / File",
+    190: "Output Files Xferd / Exec Att",
+    191: "Output MB Xferd / Exec Att",
+    192: "Output MB / File",
+
     200: "Max Rqst Mem MB",
     210: "Med Used Mem MB",
     220: "Max Used Mem MB",
@@ -69,12 +76,8 @@ DEFAULT_FILTER_ATTRS = [
     "EnteredCurrentStatus",
     "BytesSent",
     "BytesRecvd",
-
-    # Addded for tracking long running jobs
-    "StartdPrincipal",
-    "StartdName",
-    "GlobalJobId",
-    "MachineAttrMips0",
+    "TransferInputFilesCount",
+    "TransferOutputFilesCount",
 ]
 
 
@@ -327,7 +330,7 @@ class OsgScheddCpuFilter(BaseFilter):
             columns[5] = "Num Users"
         if agg == "Site":
             columns[5] = "Num Users"
-            rm_columns = [30,50,70,80,85,90,95,300,305,310,320,325,330,340,350,355,370,380]
+            rm_columns = [30,50,70,80,85,90,95,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,370,380]
             [columns.pop(key) for key in rm_columns]
         return columns
             
@@ -384,10 +387,6 @@ class OsgScheddCpuFilter(BaseFilter):
         # Compute columns
         row["All CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
-        row["Avg MB Sent"]      = stats.mean(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Max MB Sent"]      = max(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Avg MB Recv"]      = stats.mean(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
-        row["Max MB Recv"]      = max(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
         row["Num Short Jobs"]   = sum(self.clean(is_short_job))
         row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
         row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
@@ -503,10 +502,6 @@ class OsgScheddCpuFilter(BaseFilter):
         row["Num Job Holds"]    = sum(self.clean(data["NumHolds"]))
         row["Num Jobs w/1+ Holds"] = sum([holds > 0 for holds in self.clean(data["NumHolds"])])
         row["Num Jobs w/>1 Exec Att"] = sum([starts > 1 for starts in self.clean(data["NumJobStarts"])])
-        row["Avg MB Sent"]      = stats.mean(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Max MB Sent"]      = max(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Avg MB Recv"]      = stats.mean(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
-        row["Max MB Recv"]      = max(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
         row["Num Short Jobs"]   = sum(self.clean(is_short_job))
         row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
         row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
@@ -544,6 +539,25 @@ class OsgScheddCpuFilter(BaseFilter):
             row["CPU Hours / Bad Exec Att"] = (sum(badput_cpu_time) / 3600) / sum(data["_NumBadJobStarts"])
         else:
             row["CPU Hours / Bad Exec Att"] = 0
+        if sum(self.clean(num_exec_attempts)) > 0:
+            exec_att     = sum(self.clean(num_exec_attempts))
+            input_files  = sum(self.clean(data["TransferInputFilesCount"], allow_empty_list=False))
+            input_mb     = sum(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
+            output_files = sum(self.clean(data["TransferOutputFilesCount"], allow_empty_list=False))
+            output_mb    = sum(self.clean(data["BytesSent"], allow_empty_list=False))  / 1e6
+            row["Input Files Xferd / Exec Att"] = input_files / exec_att
+            row["Input MB Xferd / Exec Att"] = input_mb / exec_att
+            row["Input MB / File"] = input_mb / input_files
+            row["Output Files Xferd / Exec Att"] = output_files / exec_att
+            row["Output MB Xferd / Exec Att"] = output_mb / exec_att
+            row["Output MB / File"] = output_mb / output_files
+        else:
+            row["Input Files Xferd / Exec Att"] = 0
+            row["Input MB Xferd / Exec Att"] = 0
+            row["Input MB / File"] = 0
+            row["Output Files Xferd / Exec Att"] = 0
+            row["Output MB Xferd / Exec Att"] = 0
+            row["Output MB / File"] = 0
 
         # Compute time percentiles and stats
         if len(long_times_sorted) > 0:
