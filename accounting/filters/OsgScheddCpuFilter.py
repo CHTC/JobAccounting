@@ -555,7 +555,7 @@ class OsgScheddCpuFilter(BaseFilter):
                 row["Input MB / File"] = -999
 
             has_output_files = sum(self.clean(data["TransferOutputFilesCount"], allow_empty_list=False)) >= 0
-            if has_output_files
+            if has_output_files:
                 output_files = sum(self.clean(data["TransferOutputFilesCount"]))
                 row["Output Files Xferd / Exec Att"] = output_files / exec_att
                 if output_files > 0:
