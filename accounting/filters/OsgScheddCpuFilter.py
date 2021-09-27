@@ -28,11 +28,6 @@ DEFAULT_COLUMNS = {
     160: "Mean Hrs",
     170: "Std Hrs",
 
-    180: "Avg MB Sent",
-    181: "Max MB Sent",
-    190: "Avg MB Recv",
-    191: "Max MB Recv",
-
     180: "Input Files Xferd / Exec Att",
     181: "Input MB Xferd / Exec Att",
     182: "Input MB / File",
@@ -547,10 +542,16 @@ class OsgScheddCpuFilter(BaseFilter):
             output_mb    = sum(self.clean(data["BytesSent"], allow_empty_list=False))  / 1e6
             row["Input Files Xferd / Exec Att"] = input_files / exec_att
             row["Input MB Xferd / Exec Att"] = input_mb / exec_att
-            row["Input MB / File"] = input_mb / input_files
             row["Output Files Xferd / Exec Att"] = output_files / exec_att
             row["Output MB Xferd / Exec Att"] = output_mb / exec_att
-            row["Output MB / File"] = output_mb / output_files
+            if input_files > 0:
+                row["Input MB / File"] = input_mb / input_files
+            else:
+                row["Input MB / File"] = 0
+            if output_files > 0:
+                row["Output MB / File"] = output_mb / output_files
+            else:
+                row["Output MB / File"] = 0
         else:
             row["Input Files Xferd / Exec Att"] = 0
             row["Input MB Xferd / Exec Att"] = 0
