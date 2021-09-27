@@ -536,22 +536,36 @@ class OsgScheddCpuFilter(BaseFilter):
             row["CPU Hours / Bad Exec Att"] = 0
         if sum(self.clean(num_exec_attempts)) > 0:
             exec_att     = sum(self.clean(num_exec_attempts))
-            input_files  = sum(self.clean(data["TransferInputFilesCount"], allow_empty_list=False))
-            input_mb     = sum(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
-            output_files = sum(self.clean(data["TransferOutputFilesCount"], allow_empty_list=False))
-            output_mb    = sum(self.clean(data["BytesSent"], allow_empty_list=False))  / 1e6
-            row["Input Files Xferd / Exec Att"] = input_files / exec_att
+
+            input_mb     = sum(self.clean(data["BytesRecvd"])) / 1e6
+            output_mb    = sum(self.clean(data["BytesSent"]))  / 1e6
             row["Input MB Xferd / Exec Att"] = input_mb / exec_att
-            row["Output Files Xferd / Exec Att"] = output_files / exec_att
             row["Output MB Xferd / Exec Att"] = output_mb / exec_att
-            if input_files > 0:
-                row["Input MB / File"] = input_mb / input_files
+
+            has_input_files = sum(self.clean(data["TransferInputFilesCount"], allow_empty_list=False)) >= 0
+            if has_input_files:
+                input_files  = sum(self.clean(data["TransferInputFilesCount"]))
+                row["Input Files Xferd / Exec Att"] = input_files / exec_att
+                if input_files > 0:
+                    row["Input MB / File"] = input_mb / input_files
+                else:
+                    row["Input MB / File"] = 0
             else:
-                row["Input MB / File"] = 0
-            if output_files > 0:
-                row["Output MB / File"] = output_mb / output_files
+                row["Input Files Xferd / Exec Att"] = -999
+                row["Input MB / File"] = -999
+
+            has_output_files = sum(self.clean(data["TransferOutputFilesCount"], allow_empty_list=False)) >= 0
+            if has_output_files
+                output_files = sum(self.clean(data["TransferOutputFilesCount"]))
+                row["Output Files Xferd / Exec Att"] = output_files / exec_att
+                if output_files > 0:
+                    row["Output MB / File"] = output_mb / output_files
+                else:
+                    row["Output MB / File"] = 0
             else:
-                row["Output MB / File"] = 0
+                row["Output Files Xferd / Exec Att"] = -999
+                row["Output MB / File"] = -999
+
         else:
             row["Input Files Xferd / Exec Att"] = 0
             row["Input MB Xferd / Exec Att"] = 0
