@@ -14,7 +14,8 @@ DEFAULT_COLUMNS = {
     60: "% Short Jobs",
     70: "% Jobs w/>1 Exec Att",
     80: "% Jobs w/1+ Holds",
-    
+    82: "% Jobs using S'ty",
+
     85: "Shadw Starts / Job Id",
     90: "Exec Atts / Shadw Start",
     95: "Holds / Job Id",
@@ -52,6 +53,7 @@ DEFAULT_COLUMNS = {
     360: "Num Short Jobs",
     370: "Num Local Univ Jobs",
     380: "Num Sched Univ Jobs",
+    390: "Num S'ty Jobs",
 }
 
 
@@ -73,12 +75,13 @@ DEFAULT_FILTER_ATTRS = [
     "BytesRecvd",
     "TransferInputFilesCount",
     "TransferOutputFilesCount",
+    "SingularityImage",
 ]
 
 
 class OsgScheddCpuFilter(BaseFilter):
     name = "OSG schedd job history"
-    
+
     def __init__(self, **kwargs):
         self.collector_host = "flock.opensciencegrid.org"
         self.schedd_collector_host_map = {}
@@ -122,7 +125,7 @@ class OsgScheddCpuFilter(BaseFilter):
         schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
         o = data["Schedds"][schedd]
 
-        # Filter out jobs that did not run in the OS pool        
+        # Filter out jobs that did not run in the OS pool
         if i.get("LastRemotePool", self.schedd_collector_host(schedd)) != self.collector_host:
             return
 
@@ -184,7 +187,7 @@ class OsgScheddCpuFilter(BaseFilter):
             o["_NumDAGNodes"].append(1)
         else:
             o["_NumDAGNodes"].append(0)
-        
+
         # Count number of history ads (i.e. number of unique job ids)
         o["_NumJobs"].append(1)
 
@@ -265,7 +268,7 @@ class OsgScheddCpuFilter(BaseFilter):
         for attr in filter_attrs:
             o[attr].append(i.get(attr, None))
 
-    
+
     def site_filter(self, data, doc):
 
         # Get input dict
@@ -328,7 +331,7 @@ class OsgScheddCpuFilter(BaseFilter):
             rm_columns = [30,50,70,80,85,90,95,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,370,380]
             [columns.pop(key) for key in rm_columns]
         return columns
-            
+
     def merge_filtered_data(self, data, agg):
         rows = super().merge_filtered_data(data, agg)
         if agg == "Site":
@@ -380,19 +383,22 @@ class OsgScheddCpuFilter(BaseFilter):
         long_times_sorted.sort()
 
         # Compute columns
-        row["All CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
+        row["All CPU Hours"]    = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
         row["Num Short Jobs"]   = sum(self.clean(is_short_job))
         row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
         row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
         row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
         row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
-        row["Num Users"] = len(set(data["User"]))
-   
+        row["Num Users"]        = len(set(data["User"]))
+        row["Num S'ty Jobs"]    = len(self.clean(data["SingularityImage"]))
+
         if row["Num Uniq Job Ids"] > 0:
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
+            row["% Jobs using S'ty"] = 100 * row["Num S'ty Jobs"] / row["Num Uniq Job Ids"]
         else:
             row["% Short Jobs"] = 0
+            row["% Jobs using S'ty"] = 0
 
         # Compute time percentiles and stats
         if len(long_times_sorted) > 0:
@@ -506,6 +512,7 @@ class OsgScheddCpuFilter(BaseFilter):
         row["Num Shadw Starts"] = sum(self.clean(num_shadow_starts))
         row["Num Local Univ Jobs"] = sum(data["_NumLocalUnivJobs"])
         row["Num Sched Univ Jobs"] = sum(data["_NumSchedulerUnivJobs"])
+        row["Num S'ty Jobs"]       = len(self.clean(data["SingularityImage"]))
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
@@ -519,6 +526,7 @@ class OsgScheddCpuFilter(BaseFilter):
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
             row["% Jobs w/>1 Exec Att"] = 100 * row["Num Jobs w/>1 Exec Att"] / row["Num Uniq Job Ids"]
             row["% Jobs w/1+ Holds"] = 100 * row["Num Jobs w/1+ Holds"] / row["Num Uniq Job Ids"]
+            row["% Jobs using S'ty"] = 100 * row["Num S'ty Jobs"] / row["Num Uniq Job Ids"]
         else:
             row["Shadw Starts / Job Id"] = 0
             row["Holds / Job Id"] = 0
@@ -526,6 +534,7 @@ class OsgScheddCpuFilter(BaseFilter):
             row["% Short Jobs"] = 0
             row["% Jobs w/>1 Exec Att"] = 0
             row["% Jobs w/1+ Holds"] = 0
+            row["% Jobs using S'ty"] = 0
         if row["Num Shadw Starts"] > 0:
             row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
         else:
@@ -606,6 +615,6 @@ class OsgScheddCpuFilter(BaseFilter):
             else:
                 row["Most Used Schedd"] = "UNKNOWN"
         if agg == "Projects":
-            row["Num Users"] = len(set(data["User"]))  
+            row["Num Users"] = len(set(data["User"]))
 
-        return row 
+        return row
