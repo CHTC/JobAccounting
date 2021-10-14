@@ -291,18 +291,13 @@ class ChtcScheddGpuFilter(BaseFilter):
             return
 
         # Get output dict for this site
-        site = i.get("MachineAttrGLIDEIN_ResourceName0", "UNKNOWN") or "UNKNOWN"
+        site = i.get("LastRemoteHost", "UNKNOWN") or "UNKNOWN"
+        site = site.split("@")[-1]
         o = data["Site"][site]
 
         # Add custom attrs to the list of attrs
         filter_attrs = DEFAULT_FILTER_ATTRS.copy()
         filter_attrs = filter_attrs + ["User"]
-
-        # Count number of DAGNode Jobs
-        if i.get("DAGNodeName") is not None and i.get("JobUniverse")!=12:
-            o["_NumDAGNodes"].append(1)
-        else:
-            o["_NumDAGNodes"].append(0)
 
         # Count number of history ads (i.e. number of unique job ids)
         o["_NumJobs"].append(1)
@@ -316,6 +311,7 @@ class ChtcScheddGpuFilter(BaseFilter):
         filters = [
             self.schedd_filter,
             self.user_filter,
+            self.site_filter,
         ]
         return filters
 
@@ -328,7 +324,7 @@ class ChtcScheddGpuFilter(BaseFilter):
             columns[5] = "Num Users"
         if agg == "Site":
             columns[5] = "Num Users"
-            rm_columns = [30,45,50,70,80,90,300,305,310,320,330,340,350,370,380,390]
+            rm_columns = [30,35,45,50,70,80,90,180,181,190,191,300,303,305,307,310,320,330,340,350,390]
             [columns.pop(key) for key in rm_columns]
         return columns
             
@@ -340,90 +336,6 @@ class ChtcScheddGpuFilter(BaseFilter):
             rows[0] = tuple(columns_sorted)
         return rows
 
-
-    def compute_site_custom_columns(self, data, agg, agg_name):
-
-        # Output dictionary
-        row = {}
-
-        # Compute goodput and total CPU hours columns
-        goodput_cpu_time = []
-        for (goodput_time, cpus) in zip(
-                data["CommittedTime"],
-                data["RequestCpus"]):
-            if None in [goodput_time, cpus]:
-                goodput_cpu_time.append(None)
-            else:
-                goodput_cpu_time.append(goodput_time * cpus)
-
-        # Short jobs are jobs that ran for < 1 minute
-        is_short_job = []
-        for (goodput_time, record_date, start_date) in zip(
-                data["CommittedTime"],
-                data["RecordTime"],
-                data["JobCurrentStartDate"]):
-            if (goodput_time is not None) and (goodput_time > 0):
-                is_short_job.append(goodput_time < 60)
-            elif None in (record_date, start_date):
-                is_short_job.append(None)
-            else:
-                is_short_job.append((record_date - start_date) < 60)
-
-        # "Long" (i.e. "normal") jobs ran >= 1 minute
-        # We only want to use these when computing percentiles,
-        # so filter out short jobs and removed jobs,
-        # and sort them so we can easily grab the percentiles later
-        long_times_sorted = []
-        for (is_short, goodput_time) in zip(
-                is_short_job,
-                data["CommittedTime"]):
-            if (is_short == False):
-                long_times_sorted.append(goodput_time)
-        long_times_sorted = self.clean(long_times_sorted)
-        long_times_sorted.sort()
-
-        # Compute columns
-        row["All CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
-        row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
-        row["Avg MB Sent"]      = stats.mean(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Max MB Sent"]      = max(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Avg MB Recv"]      = stats.mean(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
-        row["Max MB Recv"]      = max(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
-        row["Num Short Jobs"]   = sum(self.clean(is_short_job))
-        row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
-        row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
-        row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
-        row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
-        row["Num Users"] = len(set(data["User"]))
-   
-        if row["Num Uniq Job Ids"] > 0:
-            row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
-        else:
-            row["% Short Jobs"] = 0
-
-        # Compute time percentiles and stats
-        if len(long_times_sorted) > 0:
-            row["Min Hrs"]  = long_times_sorted[ 0] / 3600
-            row["25% Hrs"]  = long_times_sorted[  len(long_times_sorted)//4] / 3600
-            row["Med Hrs"]  = stats.median(long_times_sorted) / 3600
-            row["75% Hrs"]  = long_times_sorted[3*len(long_times_sorted)//4] / 3600
-            row["95% Hrs"]  = long_times_sorted[int(0.95*len(long_times_sorted))] / 3600
-            row["Max Hrs"]  = long_times_sorted[-1] / 3600
-            row["Mean Hrs"] = stats.mean(long_times_sorted) / 3600
-        else:
-            for col in [f"{x} Hrs" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
-                row[col] = 0
-
-        if len(long_times_sorted) > 1:
-            row["Std Hrs"] = stats.stdev(long_times_sorted) / 3600
-        else:
-            # There is no variance if there is only one value
-            row["Std Hrs"] = 0
-
-        # Compute mode for Project and Schedd columns in the Users table
-        row["Num Users"] = len(set(data["User"]))
-
-        return row
 
     def compute_custom_columns(self, data, agg, agg_name):
 
@@ -587,3 +499,87 @@ class ChtcScheddGpuFilter(BaseFilter):
             row["Num Users"] = len(set(data["User"]))  
 
         return row 
+
+
+    def compute_site_custom_columns(self, data, agg, agg_name):
+
+        # Output dictionary
+        row = {}
+
+        # Compute goodput and total CPU hours columns
+        goodput_cpu_time = []
+        goodput_gpu_time = []
+        for (goodput_time, cpus, gpus) in zip(
+                data["CommittedTime"],
+                data["RequestCpus"],
+                data["RequestGpus"]):
+            if None in [goodput_time, cpus, gpus]:
+                goodput_cpu_time.append(None)
+                goodput_gpu_time.append(None)
+            else:
+                goodput_cpu_time.append(goodput_time * cpus)
+                goodput_gpu_time.append(goodput_time * cpus)
+
+        # Short jobs are jobs that ran for < 1 minute
+        is_short_job = []
+        for (goodput_time, record_date, start_date) in zip(
+                data["CommittedTime"],
+                data["RecordTime"],
+                data["JobCurrentStartDate"]):
+            if (goodput_time is not None) and (goodput_time > 0):
+                is_short_job.append(goodput_time < 60)
+            elif None in (record_date, start_date):
+                is_short_job.append(None)
+            else:
+                is_short_job.append((record_date - start_date) < 60)
+
+        # "Long" (i.e. "normal") jobs ran >= 1 minute
+        # We only want to use these when computing percentiles,
+        # so filter out short jobs and removed jobs,
+        # and sort them so we can easily grab the percentiles later
+        long_times_sorted = []
+        for (is_short, goodput_time) in zip(
+                is_short_job,
+                data["CommittedTime"]):
+            if (is_short == False):
+                long_times_sorted.append(goodput_time)
+        long_times_sorted = self.clean(long_times_sorted)
+        long_times_sorted.sort()
+
+        # Compute columns
+        row["All CPU Hours"]    = sum(self.clean(goodput_cpu_time)) / 3600
+        row["All GPU Hours"]    = sum(self.clean(goodput_gpu_time)) / 3600
+        row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
+        row["Num Short Jobs"]   = sum(self.clean(is_short_job))
+        row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
+        row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
+        row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
+        row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
+        row["Max Rqst Gpus"]    = max(self.clean(data["RequestGpus"], allow_empty_list=False))
+        row["Num Users"]        = len(set(data["User"]))
+
+        if row["Num Uniq Job Ids"] > 0:
+            row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
+        else:
+            row["% Short Jobs"] = 0
+
+        # Compute time percentiles and stats
+        if len(long_times_sorted) > 0:
+            row["Min Hrs"]  = long_times_sorted[ 0] / 3600
+            row["25% Hrs"]  = long_times_sorted[  len(long_times_sorted)//4] / 3600
+            row["Med Hrs"]  = stats.median(long_times_sorted) / 3600
+            row["75% Hrs"]  = long_times_sorted[3*len(long_times_sorted)//4] / 3600
+            row["95% Hrs"]  = long_times_sorted[int(0.95*len(long_times_sorted))] / 3600
+            row["Max Hrs"]  = long_times_sorted[-1] / 3600
+            row["Mean Hrs"] = stats.mean(long_times_sorted) / 3600
+        else:
+            for col in [f"{x} Hrs" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+                row[col] = 0
+
+        if len(long_times_sorted) > 1:
+            row["Std Hrs"] = stats.stdev(long_times_sorted) / 3600
+        else:
+            # There is no variance if there is only one value
+            row["Std Hrs"] = 0
+
+        return row
