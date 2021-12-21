@@ -20,6 +20,9 @@ DEFAULT_COLUMNS = {
     90: "Exec Atts / Shadw Start",
     95: "Holds / Job Id",
 
+    100: "Mean Actv Hrs",
+    105: "Mean Setup Secs",
+
     110: "Min Hrs",
     120: "25% Hrs",
     130: "Med Hrs",
@@ -76,6 +79,8 @@ DEFAULT_FILTER_ATTRS = [
     "TransferInputFilesCount",
     "TransferOutputFilesCount",
     "SingularityImage",
+    "ActivationDuration",
+    "ActivationSetUpDuration",
 ]
 
 
@@ -382,6 +387,23 @@ class OsgScheddCpuFilter(BaseFilter):
         long_times_sorted = self.clean(long_times_sorted)
         long_times_sorted.sort()
 
+        # Activation metrics added in 9.4.1
+        # Added to the OSG Connect access points at 1640100600
+        activation_durations = []
+        setup_durations = []
+        act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
+        for (start_date, activation_duration, setup_duration) in zip(
+                data["JobCurrentStartDate"],
+                data["ActivationDuration"],
+                data["ActivationSetUpDuration"]):
+            if None in {activation_duration, setup_duration}:
+                continue
+            if ((start_date > act_cutoff_date) and
+                (activation_duration < (act_cutoff_date - 24*3600) and
+                (setup_duration < (act_cutoff_date - 24*3600))):
+                activation_durations.append(activation_duration)
+                setup_durations.append(setup_duration)
+
         # Compute columns
         row["All CPU Hours"]    = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
@@ -399,6 +421,16 @@ class OsgScheddCpuFilter(BaseFilter):
         else:
             row["% Short Jobs"] = 0
             row["% Jobs using S'ty"] = 0
+
+        # Compute activation time stats
+        if len(activation_durations) > 0:
+            row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
+        else:
+            row["Mean Actv Hrs"] = ""
+        if len(setup_durations) > 0:
+            row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
+        else:
+            row["Mean Setup Secs"] = ""
 
         # Compute time percentiles and stats
         if len(long_times_sorted) > 0:

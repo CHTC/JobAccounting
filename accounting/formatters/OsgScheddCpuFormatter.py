@@ -70,6 +70,7 @@ class OsgScheddCpuFormatter(BaseFormatter):
             "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
             "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            "Mean Actv Hrs": lambda x: f"<td>{hhmm(x)}</td>",
             "CPU Hours / Bad Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Shadw Starts / Job Id":    lambda x: f"<td>{float(x):.2f}</td>",
             "Exec Atts / Shadw Start":  lambda x: f"<td>{float(x):.3f}</td>",
@@ -106,6 +107,9 @@ class OsgScheddCpuFormatter(BaseFormatter):
         custom_items["Shadw Starts / Job Id"]   = "Num Shadw Starts per Num Uniq Job Ids"
         custom_items["Exec Atts / Shadw Start"] = "Num Exec Atts per Num Shadw Starts"
         custom_items["Holds / Job Id"] = "Num Job Holds per Num Uniq Job Ids"
+
+        custom_items["Mean Actv Hrs"] = "Mean slot activation time (in hours)"
+        custom_items["Mean Setup Secs"] = "Mean slot activation setup time (in seconds)"
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
 
