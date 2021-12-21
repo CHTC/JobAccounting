@@ -402,7 +402,7 @@ class OsgScheddCpuFilter(BaseFilter):
                 continue
             if ((start_date > act_cutoff_date) and
                 (activation_duration < (act_cutoff_date - 24*3600) and
-                (setup_duration < (act_cutoff_date - 24*3600))):
+                (setup_duration < (act_cutoff_date - 24*3600)))):
                 activation_durations.append(activation_duration)
                 setup_durations.append(setup_duration)
 
