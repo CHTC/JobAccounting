@@ -82,7 +82,7 @@ DEFAULT_FILTER_ATTRS = [
     "TransferOutputFilesTotalCount",
     "SingularityImage",
     "ActivationDuration",
-    "ActivationSetUpDuration",
+    "ActivationSetupDuration",
 ]
 
 
@@ -394,11 +394,13 @@ class OsgScheddCpuFilter(BaseFilter):
         activation_durations = []
         setup_durations = []
         act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
-        for (start_date, activation_duration, setup_duration) in zip(
+        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
+                data["JobStartDate"],
                 data["JobCurrentStartDate"],
                 data["ActivationDuration"],
-                data["ActivationSetUpDuration"]):
-            if None in {activation_duration, setup_duration}:
+                data["ActivationSetupDuration"]):
+            start_date = current_start_date or start_date
+            if None in [start_date, activation_duration, setup_duration]:
                 continue
             if ((start_date > act_cutoff_date) and
                 (activation_duration < (act_cutoff_date - 24*3600) and
@@ -553,11 +555,13 @@ class OsgScheddCpuFilter(BaseFilter):
         activation_durations = []
         setup_durations = []
         act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
-        for (start_date, activation_duration, setup_duration) in zip(
+        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
+                data["JobStartDate"],
                 data["JobCurrentStartDate"],
                 data["ActivationDuration"],
-                data["ActivationSetUpDuration"]):
-            if None in {activation_duration, setup_duration}:
+                data["ActivationSetupDuration"]):
+            start_date = current_start_date or start_date
+            if None in [start_date, activation_duration, setup_duration]:
                 continue
             if ((start_date > act_cutoff_date) and
                 (activation_duration < (act_cutoff_date - 24*3600) and
