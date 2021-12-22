@@ -66,6 +66,7 @@ DEFAULT_FILTER_ATTRS = [
     "RequestCpus",
     "RequestMemory",
     "RecordTime",
+    "JobStartDate",
     "JobCurrentStartDate",
     "MemoryUsage",
     "NumJobStarts",
