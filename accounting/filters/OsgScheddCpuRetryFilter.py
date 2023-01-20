@@ -273,6 +273,8 @@ class OsgScheddCpuRetryFilter(BaseFilter):
             row["% Jobs w/ >0 Input Xfer Errs"] = "n/a"
         if row["Non Success Shadows (NSS)"] > 0:
             row["% NSS due to Input Xfer Errs"] = 100 * num_holds_input_transfer_errors / non_success_shadow_starts
+        else:
+            row["% NSS due to Input Xfer Errs"] = "n/a"
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
