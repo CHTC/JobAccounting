@@ -31,7 +31,7 @@ def parse_latest_hold_reasons():
         if line.rstrip().endswith("*/"):
             in_comment_block = False
             continue
-        if in_comment:
+        if in_comment_block:
             continue
         if line.lstrip().startswith("#") or line.lstrip().startswith("//"):
             continue
