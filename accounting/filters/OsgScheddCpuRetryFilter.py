@@ -266,11 +266,11 @@ class OsgScheddCpuRetryFilter(BaseFilter):
         if row["Num Uniq Job Ids"] > 0:
             row["Shadow Starts / Job Id"] = sum(self.clean(data["NumShadowStarts"], allow_empty_list=False)) / row["Num Uniq Job Ids"]
             row["% Jobs w/ >1 Shadow Starts"] = 100 * num_jobs_multi_shadows / row["Num Uniq Job Ids"]
-            row["% Jobs w/ >0 Xfer Input Errors"] = 100 * num_jobs_input_transfer_errors / row["Num Uniq Job Ids"]
+            row["% Jobs w/ >0 Input Xfer Errs"] = 100 * num_jobs_input_transfer_errors / row["Num Uniq Job Ids"]
         else:
             row["Shadw Starts / Job Id"] = "n/a"
             row["% Jobs w/ >1 Shadow Starts"] = "n/a"
-            row["% Jobs w/ >0 Xfer Input Errors"] = "n/a"
+            row["% Jobs w/ >0 Input Xfer Errs"] = "n/a"
         if row["Non Success Shadows (NSS)"] > 0:
             row["% NSS due to Input Xfer Errs"] = 100 * num_holds_input_transfer_errors / non_success_shadow_starts
 
