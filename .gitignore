@@ -11,3 +11,5 @@ lastlog*
 __pycache__
 *.pkl
 *.log
+*.pickle
+get_*.py
