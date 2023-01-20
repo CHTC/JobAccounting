@@ -7,3 +7,4 @@ from .ChtcScheddCpuFilter import ChtcScheddCpuFilter
 from .ChtcScheddCpuRemovedFilter import ChtcScheddCpuRemovedFilter
 from .ChtcScheddGpuFilter import ChtcScheddGpuFilter
 from .OsgScheddLongJobFilter import OsgScheddLongJobFilter
+from .OsgScheddCpuRetryFilter import OsgScheddCpuRetryFilter
