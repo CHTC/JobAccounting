@@ -249,6 +249,9 @@ class OsgScheddCpuRetryFilter(BaseFilter):
         num_jobs_input_transfer_errors = 0
         condor_hold_reasons = get_hold_reasons()
         for job_hold_reasons in data["NumHoldsByReason"]:
+            if job_hold_reasons is None:
+                continue
+
             if transfer_input_error_reasons & set(job_hold_reasons):
                 transfer_input_holds = sum([
                     int(job_hold_reasons.get(reason, 0))
