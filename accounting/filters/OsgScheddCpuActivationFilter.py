@@ -240,7 +240,7 @@ class OsgScheddCpuActivationFilter(BaseFilter):
 
             if num_shadow_starts > num_job_starts:
                 num_failures += num_shadow_starts - num_job_starts
-                num_jobs_failures += 1
+                num_job_failures += 1
 
         # Compute failure reasons
         transfer_input_hold_reasons = {
