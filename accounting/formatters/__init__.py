@@ -6,4 +6,4 @@ from .ChtcScheddCpuFormatter import ChtcScheddCpuFormatter
 from .ChtcScheddCpuRemovedFormatter import ChtcScheddCpuRemovedFormatter
 from .ChtcScheddGpuFormatter import ChtcScheddGpuFormatter
 from .OsgScheddLongJobFormatter import OsgScheddLongJobFormatter
-from .OsgScheddCpuRetryFormatter import OsgScheddCpuRetryFormatter
+from .OsgScheddCpuActivationFormatter import OsgScheddCpuActivationFormatter

@@ -3,28 +3,32 @@ import htcondor
 import pickle
 from pathlib import Path
 from .BaseFilter import BaseFilter
-from accounting.pull_hold_reasons import get_hold_reasons
 
 
 DEFAULT_COLUMNS = {
-    10: "All CPU Hours",  # Num Uniq Job Ids
-    20: "Shadow Starts / Job Id",
-    30: "Non Success Shadows (NSS)",
+    10: "Num Jobs w/ Activation Atts",
+    20: "All CPU Hours",  # "Num Jobs w/ Activation Failures"
+    30: "% Jobs w/ Failures",
 
-    50: "% Jobs w/ >1 Shadow Starts",
-    60: "% Jobs w/ >0 Input Xfer Errs",
-    70: "% NSS due to Input Xfer Errs",
+    50: "Num Atts",
+    60: "Num Atts / Job",
+    70: "Num Failures",
+    80: "Num Failures / Job",
+    90: "Failures / Att",
+
+    200: "Failure Reasons:",
+    210: "% Transfer Input",
+    300: "% Other",
 }
 
 DEFAULT_FILTER_ATTRS = [
+    "NumJobStarts",
     "NumShadowStarts",
-    "NumHolds",
     "NumHoldsByReason",
-    "JobStatus",
 ]
 
-class OsgScheddCpuRetryFilter(BaseFilter):
-    name = "OSG schedd retried job history"
+class OsgScheddCpuActivationFilter(BaseFilter):
+    name = "OSG schedd activation failure job history"
     
     def __init__(self, **kwargs):
         self.collector_hosts = {"cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"}
@@ -203,7 +207,6 @@ class OsgScheddCpuRetryFilter(BaseFilter):
         columns = DEFAULT_COLUMNS.copy()
         if agg == "Users":
             columns[5] = "Most Used Project"
-            columns[175] = "Most Used Schedd"
         if agg == "Projects":
             columns[5] = "Num Users"
         return columns
@@ -211,7 +214,7 @@ class OsgScheddCpuRetryFilter(BaseFilter):
     def merge_filtered_data(self, data, agg):
         rows = super().merge_filtered_data(data, agg)
         columns_sorted = list(rows[0])
-        columns_sorted[columns_sorted.index("All CPU Hours")] = "Num Uniq Job Ids"
+        columns_sorted[columns_sorted.index("All CPU Hours")] = "Num Jobs w/ Activation Failures"
         rows[0] = tuple(columns_sorted)
         return rows
 
@@ -220,61 +223,62 @@ class OsgScheddCpuRetryFilter(BaseFilter):
         # Output dictionary
         row = {}
 
-        # Compute non successful shadow starts
-        non_success_shadow_starts = 0
-        num_jobs_multi_shadows = 0
+        # Compute failures
+        num_failures = 0
+        num_job_failures = 0
+        num_shadow_failures = 0
         for (
                 num_shadow_starts,
-                job_status
+                num_job_starts
             ) in zip(
                 data["NumShadowStarts"],
-                data["JobStatus"]
+                data["NumJobStarts"]
             ):
-            if None in [num_shadow_starts, job_status]:
-                continue
 
-            if num_shadow_starts > 1:
-                num_jobs_multi_shadows += 1
-            if job_status == 3:  # removed jobs never succeeded
-                non_success_shadow_starts += num_shadow_starts
-            else:  # assume last shadow start succeeded
-                non_success_shadow_starts += max(0, num_shadow_starts - 1)
+            if num_job_starts is None:
+                num_job_starts = 0
 
-        # Compute transfer input hold counts
-        transfer_input_error_reasons = {
+            if num_shadow_starts > num_job_starts:
+                num_failures += num_shadow_starts - num_job_starts
+                num_jobs_failures += 1
+
+        # Compute failure reasons
+        transfer_input_hold_reasons = {
             "TransferInputError",
             "UploadFileError",
         }
-        num_holds_input_transfer_errors = 0
-        num_jobs_input_transfer_errors = 0
-        condor_hold_reasons = get_hold_reasons()
+        num_failures_transfer_input = 0
         for job_hold_reasons in data["NumHoldsByReason"]:
             if job_hold_reasons is None:
                 continue
 
-            if transfer_input_error_reasons & set(job_hold_reasons):
-                transfer_input_holds = sum([
+            if transfer_input_hold_reasons & set(job_hold_reasons):
+                num_failures_transfer_input = sum([
                     int(job_hold_reasons.get(reason, 0))
                     for reason in transfer_input_error_reasons
                 ])
-                num_holds_input_transfer_errors += transfer_input_holds
-                num_jobs_input_transfer_errors += int(transfer_input_holds > 0)
+        # Everything else falls under other reasons
+        num_failures_other = num_failures - (
+                               num_failures_transfer_input
+                            )
 
         # Compute columns
-        row["Num Uniq Job Ids"] = sum(data["_NumJobs"])
-        row["Non Success Shadows (NSS)"] = non_success_shadow_starts
-        if row["Num Uniq Job Ids"] > 0:
-            row["Shadow Starts / Job Id"] = sum(self.clean(data["NumShadowStarts"], allow_empty_list=False)) / row["Num Uniq Job Ids"]
-            row["% Jobs w/ >1 Shadow Starts"] = 100 * num_jobs_multi_shadows / row["Num Uniq Job Ids"]
-            row["% Jobs w/ >0 Input Xfer Errs"] = 100 * num_jobs_input_transfer_errors / row["Num Uniq Job Ids"]
+        row["Num Jobs w/ Activation Atts"] = sum(data["_NumJobs"])
+        row["Num Jobs w/ Activation Failures"] = num_job_failures
+        row["% Jobs w/ Failures"] = 100 * row["Num Jobs w/ Activation Failures"] / row["Num Jobs w/ Activation Atts"]
+
+        row["Num Atts"] = sum(self.clean(data["NumShadowStarts"], allow_empty_list=False))
+        row["Num Atts / Job"] = row["Num Atts"] / row["Num Jobs w/ Activation Atts"]
+        row["Num Failures"] = num_failures
+        row["Num Failures / Job"] = row["Num Failures"] / row["Num Jobs w/ Activation Atts"]
+        row["Failures / Att"] = row["Num Failures"] / row["Num Atts"]
+
+        row["Failure Reasons:"] = ""
+        if row["Num Failures"] > 0:
+            row["% Transfer Input"] = 100 * num_failures_transfer_input / row["Num Failures"]
+            row["% Other"] = 100 * num_failures_other / row["Num Failures"]
         else:
-            row["Shadw Starts / Job Id"] = "n/a"
-            row["% Jobs w/ >1 Shadow Starts"] = "n/a"
-            row["% Jobs w/ >0 Input Xfer Errs"] = "n/a"
-        if row["Non Success Shadows (NSS)"] > 0:
-            row["% NSS due to Input Xfer Errs"] = 100 * num_holds_input_transfer_errors / non_success_shadow_starts
-        else:
-            row["% NSS due to Input Xfer Errs"] = "n/a"
+            row["% Transfer Input"] = row["% Other"] = "n/a"
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
@@ -292,6 +296,6 @@ class OsgScheddCpuRetryFilter(BaseFilter):
         if agg == "Projects":
             row["Num Users"] = len(set(data["User"]))  
 
-        row["All CPU Hours"] = row["Num Uniq Job Ids"]
+        row["All CPU Hours"] = row["Num Jobs w/ Activation Failures"]
 
         return row 
