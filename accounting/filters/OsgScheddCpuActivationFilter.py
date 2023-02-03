@@ -11,15 +11,16 @@ DEFAULT_COLUMNS = {
     30: "% Jobs w/ Failures",
     40: "% Atts w/ Failures",
 
-    200: "Failure Reasons:",
-    210: "% Transfer Input",
-    400: "% Other",
-    410: "",
-
+    200: "Num Failures",
+    300: "Num Transfer Input Failures",
+    305: "% Transfer Input Failures",
+    400: "Num Other Failures",
+    405: "% Other Failures",
+    
     500: "Num Atts",
-    600: "Num Failures",
-    700: "Atts / Job",
-    800: "Failures / Job",
+    600: "Atts / Job",
+    700: "Failures / Job",
+
 }
 
 DEFAULT_FILTER_ATTRS = [
@@ -264,23 +265,24 @@ class OsgScheddCpuActivationFilter(BaseFilter):
                             )
 
         # Compute columns
-        row["Num Jobs w/ Activation Atts"] = sum(data["_NumJobs"])
+        row["Num Jobs w/ Activation Atts"] = num_jobs = sum(data["_NumJobs"])
         row["Num Jobs w/ Activation Failures"] = num_job_failures
-        row["% Jobs w/ Failures"] = 100 * row["Num Jobs w/ Activation Failures"] / row["Num Jobs w/ Activation Atts"]
+        row["% Jobs w/ Failures"] = 100 * num_job_failures / num_jobs
 
-        row["Num Atts"] = sum(self.clean(data["NumShadowStarts"], allow_empty_list=False))
-        row["Atts / Job"] = row["Num Atts"] / row["Num Jobs w/ Activation Atts"]
+        row["Num Atts"] = num_atts = sum(self.clean(data["NumShadowStarts"], allow_empty_list=False))
+        row["Atts / Job"] = num_atts / num_jobs
         row["Num Failures"] = num_failures
-        row["Failures / Job"] = row["Num Failures"] / row["Num Jobs w/ Activation Atts"]
-        row["% Atts w/ Failures"] = 100 * row["Num Failures"] / row["Num Atts"]
+        row["Failures / Job"] = num_failures / num_atts
+        row["% Atts w/ Failures"] = 100 * num_failures / num_atts
 
-        row["Failure Reasons:"] = ""
-        if row["Num Failures"] > 0:
-            row["% Transfer Input"] = 100 * num_failures_transfer_input / row["Num Failures"]
-            row["% Other"] = 100 * num_failures_other / row["Num Failures"]
+        row["Num Transfer Input Failures"] = num_failures_transfer_input
+        row["Num Other Failures"] = num_failures_other
+        if num_failures > 0:
+            row["% Transfer Input Failures"] = 100 * num_failures_transfer_input / num_failures
+            row["% Other Failures"] = 100 * num_failures_other / num_failures
         else:
-            row["% Transfer Input"] = row["% Other"] = "n/a"
-        row[""] = ""
+            row["% Transfer Input Failures"] = "n/a"
+            row["% Other Failures"] = "n/a"
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":

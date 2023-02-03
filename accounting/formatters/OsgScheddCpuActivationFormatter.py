@@ -38,19 +38,22 @@ class OsgScheddCpuActivationFormatter(BaseFormatter):
         return subject_str
 
     def rm_cols(self, data):
-        cols = {}
+        cols = {
+            "Num Failures",
+            "Num Transfer Input Failures",
+            "Num Other Failures",
+            "Num Atts",
+        }
         return super().rm_cols(data, cols=cols)
 
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
             "% Jobs w/ Failures":   lambda x: f"<td>{float(x):.1f}</td>",
+            "% Atts w/ Failures":   lambda x: f"<td>{float(x):.1f}</td>",
             "Atts / Job":           lambda x: f"<td>{float(x):.2f}</td>",
             "Failures / Job":       lambda x: f"<td>{float(x):.2f}</td>",
-            "% Atts w/ Failures":   lambda x: f"<td>{float(x):.2f}</td>",
-            "% Transfer Input":     lambda x: f"<td>{float(x):.1f}</td>",
-            "% Other":              lambda x: f"<td>{float(x):.1f}</td>",
-            "Failure Reasons:":     lambda x: "<td></td>",
-            "":                     lambda x: "<td></td>",
+            "% Transfer Input Failures":     lambda x: f"<td>{float(x):.1f}</td>",
+            "% Other Failures":              lambda x: f"<td>{float(x):.1f}</td>",
         }
         rows = super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
         return rows
