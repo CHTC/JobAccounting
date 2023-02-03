@@ -9,16 +9,17 @@ DEFAULT_COLUMNS = {
     10: "Num Jobs w/ Activation Atts",
     20: "All CPU Hours",  # "Num Jobs w/ Activation Failures"
     30: "% Jobs w/ Failures",
-
-    50: "Num Atts",
-    60: "Atts / Job",
-    70: "Num Failures",
-    80: "Failures / Job",
-    90: "Failures / Att",
+    40: "% Atts w/ Failures",
 
     200: "Failure Reasons:",
     210: "% Transfer Input",
-    300: "% Other",
+    400: "% Other",
+    410: "",
+
+    500: "Num Atts",
+    600: "Num Failures",
+    700: "Atts / Job",
+    800: "Failures / Job",
 }
 
 DEFAULT_FILTER_ATTRS = [
@@ -271,7 +272,7 @@ class OsgScheddCpuActivationFilter(BaseFilter):
         row["Atts / Job"] = row["Num Atts"] / row["Num Jobs w/ Activation Atts"]
         row["Num Failures"] = num_failures
         row["Failures / Job"] = row["Num Failures"] / row["Num Jobs w/ Activation Atts"]
-        row["Failures / Att"] = row["Num Failures"] / row["Num Atts"]
+        row["% Atts w/ Failures"] = 100 * row["Num Failures"] / row["Num Atts"]
 
         row["Failure Reasons:"] = ""
         if row["Num Failures"] > 0:
@@ -279,6 +280,7 @@ class OsgScheddCpuActivationFilter(BaseFilter):
             row["% Other"] = 100 * num_failures_other / row["Num Failures"]
         else:
             row["% Transfer Input"] = row["% Other"] = "n/a"
+        row[""] = ""
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
