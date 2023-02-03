@@ -255,7 +255,7 @@ class OsgScheddCpuActivationFilter(BaseFilter):
             if transfer_input_hold_reasons & set(job_hold_reasons):
                 num_failures_transfer_input = sum([
                     int(job_hold_reasons.get(reason, 0))
-                    for reason in transfer_input_error_reasons
+                    for reason in transfer_input_hold_reasons
                 ])
         # Everything else falls under other reasons
         num_failures_other = num_failures - (
