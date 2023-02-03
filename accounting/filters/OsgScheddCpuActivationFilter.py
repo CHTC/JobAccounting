@@ -11,9 +11,9 @@ DEFAULT_COLUMNS = {
     30: "% Jobs w/ Failures",
 
     50: "Num Atts",
-    60: "Num Atts / Job",
+    60: "Atts / Job",
     70: "Num Failures",
-    80: "Num Failures / Job",
+    80: "Failures / Job",
     90: "Failures / Att",
 
     200: "Failure Reasons:",
@@ -268,9 +268,9 @@ class OsgScheddCpuActivationFilter(BaseFilter):
         row["% Jobs w/ Failures"] = 100 * row["Num Jobs w/ Activation Failures"] / row["Num Jobs w/ Activation Atts"]
 
         row["Num Atts"] = sum(self.clean(data["NumShadowStarts"], allow_empty_list=False))
-        row["Num Atts / Job"] = row["Num Atts"] / row["Num Jobs w/ Activation Atts"]
+        row["Atts / Job"] = row["Num Atts"] / row["Num Jobs w/ Activation Atts"]
         row["Num Failures"] = num_failures
-        row["Num Failures / Job"] = row["Num Failures"] / row["Num Jobs w/ Activation Atts"]
+        row["Failures / Job"] = row["Num Failures"] / row["Num Jobs w/ Activation Atts"]
         row["Failures / Att"] = row["Num Failures"] / row["Num Atts"]
 
         row["Failure Reasons:"] = ""

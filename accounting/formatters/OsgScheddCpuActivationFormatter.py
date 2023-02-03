@@ -44,8 +44,8 @@ class OsgScheddCpuActivationFormatter(BaseFormatter):
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
             "% Jobs w/ Failures":   lambda x: f"<td>{float(x):.1f}</td>",
-            "Num Atts / Job":       lambda x: f"<td>{float(x):.2f}</td>",
-            "Num Failures / Job":   lambda x: f"<td>{float(x):.2f}</td>",
+            "Atts / Job":       lambda x: f"<td>{float(x):.2f}</td>",
+            "Failures / Job":   lambda x: f"<td>{float(x):.2f}</td>",
             "Failures / Att":       lambda x: f"<td>{float(x):.2f}</td>",
             "Failure Reasons:":     lambda x: "<td></td>",
             "% Transfer Input":     lambda x: f"<td>{float(x):.1f}</td>",
@@ -60,9 +60,9 @@ class OsgScheddCpuActivationFormatter(BaseFormatter):
         custom_items["Num Jobs w/ Activation Failures"] = "Number of jobs with at least one activation failure (i.e. shadow start w/ job start)"
         custom_items["% Jobs w/ Failures"] = "Percentage of jobs with at least one activation failure"
         custom_items["Num Atts"] = "Number of activation attempts across all jobs"
-        custom_items["Num Atts / Job"] = "Activations attempted per job"
+        custom_items["Atts / Job"] = "Activations attempted per job"
         custom_items["Num Failures"] = "Number of activation failures across all jobs"
-        custom_items["Num Failures / Job"] = "Activations failed per job"
+        custom_items["Failures / Job"] = "Activations failed per job"
         custom_items["Failures / Att"] = "Activations failed per activation attempt"
         custom_items["Failure Reasons"] = "Percentage of activation attempts that failed for the given reason"
         html = super().get_legend(custom_items)
