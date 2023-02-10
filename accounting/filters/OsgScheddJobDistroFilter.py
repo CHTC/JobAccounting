@@ -23,11 +23,11 @@ OSG_CONNECT_APS = {
     "ap7.chtc.wisc.edu@ap2007.chtc.wisc.edu",
 }
 
-DISK_COLUMNS = {x: f"{x} to <{x+2} GB" for x in range(0, 20, 2)}
-DISK_COLUMNS[20] = "20+ GB"
+DISK_COLUMNS = {x: f"[{x}, {x+2})" for x in range(0, 20, 2)}
+DISK_COLUMNS[20] = "[20,)"
 
-MEMORY_ROWS = {y: f"{y} to <{y+1} GB" for y in range(0, 8, 1)}
-MEMORY_ROWS[8] = "8+ GB"
+MEMORY_ROWS = {y: f"[{y}, {y+1})" for y in range(0, 8, 1)}
+MEMORY_ROWS[8] = "[8,)"
 
 class OsgScheddJobDistroFilter(BaseFilter):
     name = "OSG schedd job distribution"
@@ -243,13 +243,18 @@ class OsgScheddJobDistroFilter(BaseFilter):
 
 
         histogram = defaultdict(int)
+        jobs = 0
         for disk, memory in zip(data["RequestDisk"], data["RequestMemory"]):
             if None in [disk, memory]:
                 continue
             d, m = quantize_disk(disk), quantize_memory(memory)
             histogram[(d, m)] += 1
+            jobs += 1
 
-        return histogram
+        for k, v in histogram.items():
+            histogram[k] = 100*v/jobs
+
+        return histogram, jobs
 
 
     def merge_filtered_data(self, data, *args):
@@ -257,14 +262,14 @@ class OsgScheddJobDistroFilter(BaseFilter):
         # Columns are disk requests
         # Rows are memory requests
 
-        histogram = self.compute_histogram(data["Jobs"])
+        histogram, jobs = self.compute_histogram(data["Jobs"])
         xs = list(DISK_COLUMNS.keys())
         xs.sort()
         ys = list(MEMORY_ROWS.keys())
         ys.sort()
 
         rows = []
-        header_row = ["Disk/Memory"]
+        header_row = [jobs]
         for key in xs:
             header_row.append(DISK_COLUMNS[key])
         rows.append(tuple(header_row))

@@ -2,6 +2,7 @@ import csv
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
+from decimal import Decimal
 
 
 def break_chars(s):
@@ -75,7 +76,7 @@ class OsgScheddJobDistroFormatter:
 
     def get_subject(self, *args, **kwargs):
         info = self.parse_table_filename(self.table_files[0])
-        subject_str = f"{info['duration'].capitalize()} OSPool Resource Histogram {info['start']}"
+        subject_str = f"{info['duration'].capitalize()} OSG Connect Resource Histogram {info['start']}"
         return subject_str
 
 
@@ -93,17 +94,19 @@ class OsgScheddJobDistroFormatter:
 
     def format_rows(self, header, rows):
 
-        # get the maximum
-        n_max = 0
-        for i, row in enumerate(rows):
-            if i == 0:
-                continue
-            n_max = max(n_max, max([int(x) for x in row[1:]]))
+        jobs = rows[0][0]
 
         # shade the cell green if close to the max
-        default_numeric_fmt = lambda x: f'<td style="background-color: rgb({1-(x/n_max)/2:.0%}, 100%, {1-(x/n_max)/2:.0%})">{int(x):,}</td>'
-        default_col_header_fmt = lambda x: f'<th style="background-color: #ddd; text-align: center; font-weight: bold">{break_chars(x)}</th>'
-        default_row_header_fmt = lambda x: f'<td style="background-color: #ddd; text-align: right; font-weight: bold">{break_chars(x)}</td>'
+        def numeric_fmt(x):
+            x = Decimal(x)
+            rgb = (100-x/2, 100, 100-x/2)
+            d = ""  # decimal places
+            if x.adjusted() < 0:
+                d = str(abs(x.adjusted()))
+            return f'<td style="background-color: rgb({",".join([f"{v}%" for v in rgb])})">{x:.{d}f}%</td>'
+
+        col_header_fmt = lambda x: f'<th style="background-color: #ddd; text-align: center; font-weight: bold">{break_chars(x)}</th>'
+        row_header_fmt = lambda x: f'<td style="background-color: #ddd; text-align: right; font-weight: bold">{break_chars(x)}</td>'
 
         rows = rows.copy()
         for i, row in enumerate(rows):
@@ -113,14 +116,20 @@ class OsgScheddJobDistroFormatter:
                     rows[i][j] = """<th style="font-family: monospace; white-space: pre; margin: 0; text-align: left">      Disk
 Memory</th>"""
                 elif i == 0:
-                    rows[i][j] = default_col_header_fmt(value)
+                    rows[i][j] = col_header_fmt(value)
                 elif j == 0:
-                    rows[i][j] = default_row_header_fmt(value)
+                    rows[i][j] = row_header_fmt(value)
                 else:
                     try:
-                        rows[i][j] = default_numeric_fmt(int(value))
+                        rows[i][j] = numeric_fmt(value)
                     except TypeError:
                         rows[i][j] = "<td>n/a</td>"
+
+        # Extra header row
+        rows.insert(0, [
+            f"""<th style="text-align: left">{int(jobs)} jobs</th>""",
+            f"""<th style="text-align: center" colspan="{len(rows[0])-1}">Single-core jobs, memory and disk in GB</th>""",
+            ])
 
         return rows
 
