@@ -87,7 +87,6 @@ class OsgScheddJobDistroFormatter:
             "header": header,
             "rows": rows,
         }
-        self.rm_cols(data)
         return data
 
 
