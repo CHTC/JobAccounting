@@ -81,8 +81,8 @@ class OsgScheddJobDistroFormatter:
     def load_table(self, filename):
         with open(filename) as f:
             reader = csv.reader(f)
-            header = [""] + next(reader)
-            rows = [[""] + row for row in reader]
+            header = None
+            rows = [row for row in reader]
         data = {
             "header": header,
             "rows": rows,
@@ -101,7 +101,7 @@ class OsgScheddJobDistroFormatter:
 
         # shade the cell green if close to the max
         default_numeric_fmt = lambda x: f'<td style="background-color: rgb({1-(x/n_max)/2:.0%}, 100%, {1-(x/n_max)/2:.0%})">{int(x):,}</td>'
-        default_col_header_fmt = lambda x: f'<td style="text-align: center; font-weight: bold">{break_chars(x)}</td>'
+        default_col_header_fmt = lambda x: f'<th style="text-align: center; font-weight: bold">{break_chars(x)}</th>'
         default_row_header_fmt = lambda x: f'<td style="text-align: right; font-weight: bold">{break_chars(x)}</td>'
 
         rows = rows.copy()
@@ -109,10 +109,10 @@ class OsgScheddJobDistroFormatter:
             for j, value in enumerate(row):
 
                 if i == 0 and j == 0:
-                    rows[i][j] = """<td>
+                    rows[i][j] = """<th>
 <pre>      Disk
 Memory</pre>
-</td>"""
+</th>"""
                 elif i == 0:
                     rows[i][j] = default_col_header_fmt(value)
                 elif j == 0:
@@ -138,7 +138,6 @@ Memory</pre>
         html = f"""
 <h1>{self.get_table_title(table_file, report_period, start_ts, end_ts)}</h1>
 <table>
-  <tr><th>{'</th><th>'.join(table_data['header'])}</th></tr>
   {newline.join(rows_html)}
 </table>
 """
