@@ -101,10 +101,13 @@ class OsgScheddJobDistroFormatter:
 
         # shade the cell green if close to the max
         def numeric_fmt(x):
-            x = Decimal(x)
+            x = float(x)
+            if x < 1e-12:  # hide 0s
+                return "<td></td>"
+            if int(x) < 1:
+                return "<td>%lt;1</td>"
             rgb = (100-x/2, 100, 100-x/2)
-            d = str(abs(min(0, x.adjusted())))
-            return f'<td style="background-color: rgb({",".join([f"{v}%" for v in rgb])})">{x:.{d}f}%</td>'
+            return f'<td style="background-color: rgb({",".join([f"{v}%" for v in rgb])})">{x:.0f}</td>'
 
         col_header_fmt = lambda x: f'<th style="text-align: center; font-weight: bold">{break_chars(x)}</th>'
         row_header_fmt = lambda x: f'<td style="background-color: #ddd; text-align: right; font-weight: bold">{break_chars(x)}</td>'
@@ -129,7 +132,7 @@ Memory</th>"""
         # Extra header row
         rows.insert(0, [
             f"""<th style="text-align: center">{int(jobs):,d}<br>jobs</th>""",
-            f"""<th style="text-align: center" colspan="{len(rows[0])-1}">Only single-core jobs shown.<br>Memory and disk requests in GB.</th>""",
+            f"""<th style="text-align: center" colspan="{len(rows[0])-1}">Percentage of single-core jobs.<br>Memory and disk requests in GB.</th>""",
             ])
 
         return rows
