@@ -105,7 +105,7 @@ class OsgScheddJobDistroFormatter:
             if x < 1e-12:  # hide 0s
                 return "<td></td>"
             if int(x) < 1:
-                return "<td>%lt;1</td>"
+                return "<td>&lt;1</td>"
             rgb = (100-x/2, 100, 100-x/2)
             return f'<td style="background-color: rgb({",".join([f"{v}%" for v in rgb])})">{x:.0f}</td>'
 
