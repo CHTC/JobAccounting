@@ -102,15 +102,15 @@ class OsgScheddJobDistroFormatter:
 
         # shade the cell green if close to the max
         default_numeric_fmt = lambda x: f'<td style="background-color: rgb({1-(x/n_max)/2:.0%}, 100%, {1-(x/n_max)/2:.0%})">{int(x):,}</td>'
-        default_col_header_fmt = lambda x: f'<th style="background-color: #ddd, text-align: center; font-weight: bold">{break_chars(x)}</th>'
-        default_row_header_fmt = lambda x: f'<td style="background-color: #ddd, text-align: right; font-weight: bold">{break_chars(x)}</td>'
+        default_col_header_fmt = lambda x: f'<th style="background-color: #ddd; text-align: center; font-weight: bold">{break_chars(x)}</th>'
+        default_row_header_fmt = lambda x: f'<td style="background-color: #ddd; text-align: right; font-weight: bold">{break_chars(x)}</td>'
 
         rows = rows.copy()
         for i, row in enumerate(rows):
             for j, value in enumerate(row):
 
                 if i == 0 and j == 0:
-                    rows[i][j] = """<th style="font-family: monospace; white-space: pre; margin: 0">      Disk
+                    rows[i][j] = """<th style="font-family: monospace; white-space: pre; margin: 0; text-align: left">      Disk
 Memory</th>"""
                 elif i == 0:
                     rows[i][j] = default_col_header_fmt(value)
