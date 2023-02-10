@@ -12,6 +12,7 @@ def break_chars(s):
     for char in ["@", "_", "."]:
         s = s.replace(char, f"{char}{zero_width_space}")
     s = s.replace("-", non_breaking_hyphen)
+    s = s.replace("<", "&lt;").replace(">", "&gt;")
     return s
 
 
@@ -81,7 +82,7 @@ class OsgScheddJobDistroFormatter:
 
     def get_subject(self, *args, **kwargs):
         info = self.parse_table_filename(self.table_files[0])
-        subject_str = f"{info['duration']} OSPool Resource Histogram Report {info['start']}"
+        subject_str = f"{info['duration'].capitalize()} OSPool Resource Histogram {info['start']}"
         return subject_str
 
 
@@ -117,7 +118,7 @@ class OsgScheddJobDistroFormatter:
 
                 if i == 0 and j == 0:
                     rows[i][j] = """<th>
-<pre>      Disk
+<pre style="margin: 0">      Disk
 Memory</pre>
 </th>"""
                 elif i == 0:
@@ -135,12 +136,7 @@ Memory</pre>
     def get_table_html(self, table_file, report_period, start_ts, end_ts, **kwargs):
         table_data = self.load_table(table_file)
         rows = self.format_rows(table_data["header"], table_data["rows"])
-
-        rows_html = []
-        for i, row in enumerate(rows):
-            tr_class = ["even", "odd"][i % 2]
-            rows_html.append(f'<tr class="{tr_class}">{"".join(row)}</tr>')
-
+        rows_html = [f'<tr>{"".join(row) for row in rows}</tr>']
         newline = "\n  "
         html = f"""
 <h1>{self.get_table_title(table_file, report_period, start_ts, end_ts)}</h1>

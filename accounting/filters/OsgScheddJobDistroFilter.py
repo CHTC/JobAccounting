@@ -23,10 +23,10 @@ OSG_CONNECT_APS = {
     "ap7.chtc.wisc.edu@ap2007.chtc.wisc.edu",
 }
 
-DISK_COLUMNS = {x: f"{x} - <{x+2} GB" for x in range(0, 20, 2)}
+DISK_COLUMNS = {x: f"{x} to <{x+2} GB" for x in range(0, 20, 2)}
 DISK_COLUMNS[20] = "20+ GB"
 
-MEMORY_ROWS = {y: f"{y} - <{y+1} GB" for y in range(0, 8, 1)}
+MEMORY_ROWS = {y: f"{y} to <{y+1} GB" for y in range(0, 8, 1)}
 MEMORY_ROWS[8] = "8+ GB"
 
 class OsgScheddJobDistroFilter(BaseFilter):
