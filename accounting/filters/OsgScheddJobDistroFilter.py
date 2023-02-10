@@ -257,7 +257,7 @@ class OsgScheddJobDistroFilter(BaseFilter):
         # Columns are disk requests
         # Rows are memory requests
 
-        histogram = compute_histogram(data["Jobs"])
+        histogram = self.compute_histogram(data["Jobs"])
         xs = list(DISK_COLUMNS.keys())
         xs.sort()
         ys = list(MEMORY_ROWS.keys())
