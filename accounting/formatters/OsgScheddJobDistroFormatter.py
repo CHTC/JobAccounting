@@ -128,7 +128,7 @@ Memory</th>"""
 
         # Extra header row
         rows.insert(0, [
-            f"""<th style="text-align: left">{int(jobs)} jobs</th>""",
+            f"""<th style="text-align: left">{int(jobs):,d} jobs</th>""",
             f"""<th style="text-align: center" colspan="{len(rows[0])-1}">Single-core jobs, memory and disk in GB</th>""",
             ])
 
