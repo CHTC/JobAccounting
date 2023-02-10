@@ -44,7 +44,7 @@ DEFAULT_STYLES = {
 }
 
 
-class BaseFormatter:
+class OsgScheddJobDistroFormatter:
     def __init__(self, table_files, *args, **kwargs):
         self.html_tables = []
         self.table_files = table_files
