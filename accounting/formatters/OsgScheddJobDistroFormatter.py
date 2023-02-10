@@ -110,10 +110,8 @@ class OsgScheddJobDistroFormatter:
             for j, value in enumerate(row):
 
                 if i == 0 and j == 0:
-                    rows[i][j] = """<th>
-<pre style="margin: 0">      Disk
-Memory</pre>
-</th>"""
+                    rows[i][j] = """<th style="font-family: monospace; white-space: pre; margin: 0">      Disk
+Memory</th>"""
                 elif i == 0:
                     rows[i][j] = default_col_header_fmt(value)
                 elif j == 0:
