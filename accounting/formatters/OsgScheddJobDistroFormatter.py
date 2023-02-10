@@ -100,9 +100,7 @@ class OsgScheddJobDistroFormatter:
         def numeric_fmt(x):
             x = Decimal(x)
             rgb = (100-x/2, 100, 100-x/2)
-            d = ""  # decimal places
-            if x.adjusted() < 0:
-                d = str(abs(x.adjusted()))
+            d = str(abs(min(0, x.adjusted())))
             return f'<td style="background-color: rgb({",".join([f"{v}%" for v in rgb])})">{x:.{d}f}%</td>'
 
         col_header_fmt = lambda x: f'<th style="background-color: #ddd; text-align: center; font-weight: bold">{break_chars(x)}</th>'
