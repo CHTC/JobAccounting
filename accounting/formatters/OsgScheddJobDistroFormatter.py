@@ -36,6 +36,9 @@ DEFAULT_STYLES = {
         "text-align: right",
         "min-width: 1px",
         ],
+    "th": [
+        "background-color: #ddd",
+    ]
 }
 
 
@@ -103,7 +106,7 @@ class OsgScheddJobDistroFormatter:
             d = str(abs(min(0, x.adjusted())))
             return f'<td style="background-color: rgb({",".join([f"{v}%" for v in rgb])})">{x:.{d}f}%</td>'
 
-        col_header_fmt = lambda x: f'<th style="background-color: #ddd; text-align: center; font-weight: bold">{break_chars(x)}</th>'
+        col_header_fmt = lambda x: f'<th style="text-align: center; font-weight: bold">{break_chars(x)}</th>'
         row_header_fmt = lambda x: f'<td style="background-color: #ddd; text-align: right; font-weight: bold">{break_chars(x)}</td>'
 
         rows = rows.copy()
