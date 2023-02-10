@@ -52,6 +52,13 @@ class OsgScheddJobDistroFormatter:
             self.html_tables.append(self.get_table_html(table_file, **kwargs))
 
 
+    def parse_table_filename(self, table_file):
+        basename = Path(table_file).stem
+        [name, agg, duration, start] = basename.split("_")[:4]
+        name = name.replace("-", " ")  # remove dashses
+        return {"name": name, "agg": agg, "duration": duration, "start": start}
+
+
     def get_table_title(self, table_file, report_period, start_ts, end_ts):
         info = self.parse_table_filename(table_file)
         # Format date(s)
