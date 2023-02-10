@@ -79,7 +79,7 @@ class OsgScheddJobDistroFormatter:
 
     def get_subject(self, *args, **kwargs):
         info = self.parse_table_filename(self.table_files[0])
-        subject_str = f"{info['duration'].capitalize()} OSG Connect Resource Histogram {info['start']}"
+        subject_str = f"{info['duration'].capitalize()} OSG Connect Job Resource Histogram {info['start']}"
         return subject_str
 
 
