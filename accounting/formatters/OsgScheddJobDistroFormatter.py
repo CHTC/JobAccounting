@@ -129,7 +129,7 @@ Memory</pre>
     def get_table_html(self, table_file, report_period, start_ts, end_ts, **kwargs):
         table_data = self.load_table(table_file)
         rows = self.format_rows(table_data["header"], table_data["rows"])
-        rows_html = [f'<tr>{"".join(row) for row in rows}</tr>']
+        rows_html = [f'<tr>{"".join(row)}</tr>' for row in rows]
         newline = "\n  "
         html = f"""
 <h1>{self.get_table_title(table_file, report_period, start_ts, end_ts)}</h1>
