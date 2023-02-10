@@ -30,14 +30,7 @@ DEFAULT_STYLES = {
         "border-collapse: collapse",
         "border-color: #ffffff",
         ],
-    "th": [
-        "border: 1px solid black",
-        "font-weight: bold",
-        "text-align: center",
-        "background-color: #ddd",
-        "min-width: 1px",
-        ],
-    "td": [
+    "th, td": [
         "border: 1px solid black",
         "text-align: right",
         "min-width: 1px",
@@ -109,8 +102,8 @@ class OsgScheddJobDistroFormatter:
 
         # shade the cell green if close to the max
         default_numeric_fmt = lambda x: f'<td style="background-color: rgb({1-(x/n_max)/2:.0%}, 100%, {1-(x/n_max)/2:.0%})">{int(x):,}</td>'
-        default_col_header_fmt = lambda x: f'<th style="text-align: center; font-weight: bold">{break_chars(x)}</th>'
-        default_row_header_fmt = lambda x: f'<td style="text-align: right; font-weight: bold">{break_chars(x)}</td>'
+        default_col_header_fmt = lambda x: f'<th style="background-color: #ddd, text-align: center; font-weight: bold">{break_chars(x)}</th>'
+        default_row_header_fmt = lambda x: f'<td style="background-color: #ddd, text-align: right; font-weight: bold">{break_chars(x)}</td>'
 
         rows = rows.copy()
         for i, row in enumerate(rows):
