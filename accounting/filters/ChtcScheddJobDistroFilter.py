@@ -9,11 +9,6 @@ from functools import lru_cache
 from collections import defaultdict
 
 
-DEFAULT_FILTER_ATTRS = [
-    "RequestMemory",
-    "RequestDisk",
-]
-
 CHTC_APS = {
     "atlassubmit1000.chtc.wisc.edu",
     "atlassubmit1001.chtc.wisc.edu",

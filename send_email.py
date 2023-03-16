@@ -72,7 +72,7 @@ for table_name in table_names:
     logger.debug(f"Generating CSV for {table_name}")
     csv_files[table_name] = accounting.write_csv(table_data, filtr.name, table_name, **vars(args))
 
-table_files = [csv_files[name] for name in ["Projects", "Users", "Schedds", "Site", "Institution", "Machine", "Jobs"] if name in csv_files]
+table_files = [csv_files[name] for name in ["Projects", "Users", "Schedds", "Site", "Institution", "Machine", "Jobs", "JobRequests", "JobUsages"] if name in csv_files]
 logger.info(f"Formatting data using {args.formatter.__name__}")
 formatter = args.formatter(table_files, **vars(args))
 logger.debug(f"Generating HTML")
