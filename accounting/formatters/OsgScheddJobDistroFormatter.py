@@ -96,7 +96,7 @@ class OsgScheddJobDistroFormatter:
         return data
 
 
-    def format_rows(self, header, rows):
+    def format_rows(self, header, rows, res_type="requests"):
 
         jobs_note = rows[0][0]
         single_core_jobs, total_jobs = tuple(int(x) for x in jobs_note.split("/"))
@@ -134,14 +134,15 @@ Memory</th>"""
         # Extra header row
         rows.insert(0, [
             f"""<th style="text-align: center"></th>""",
-            f"""<th style="text-align: center" colspan="{len(rows[0])-1}">Percentage of {single_core_jobs:,d} single-core jobs ({single_core_jobs/total_jobs:.1%} of all jobs).<br>Memory and disk requests in GB.</th>""",
+            f"""<th style="text-align: center" colspan="{len(rows[0])-1}">Percentage of {single_core_jobs:,d} single-core jobs ({single_core_jobs/total_jobs:.1%} of all jobs).<br>Memory and disk {res_type} in GB.</th>""",
             ])
 
         return rows
 
     def get_table_html(self, table_file, report_period, start_ts, end_ts, **kwargs):
         table_data = self.load_table(table_file)
-        rows = self.format_rows(table_data["header"], table_data["rows"])
+        info = self.parse_table_filename(table_file)
+        rows = self.format_rows(table_data["header"], table_data["rows"], res_type=info["agg"][3:].lower())
         rows_html = [f'<tr>{"".join(row)}</tr>' for row in rows]
         newline = "\n  "
         html = f"""
