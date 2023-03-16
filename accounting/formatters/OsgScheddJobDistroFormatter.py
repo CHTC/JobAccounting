@@ -61,7 +61,7 @@ class OsgScheddJobDistroFormatter:
         info = self.parse_table_filename(table_file)
         # Format date(s)
         start = datetime.fromtimestamp(start_ts)
-        res_type = info["agg"][4:].lower()
+        res_type = info["agg"][3:].lower()
         if report_period in ["daily"]:
             start_date = start.strftime("%Y-%m-%d")
             title_str = f"{report_period.capitalize()} resource {res_type} histogram for jobs completed on {start_date}"
