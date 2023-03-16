@@ -225,7 +225,7 @@ class OsgScheddJobDistroFilter(BaseFilter):
 
         usage_disk = i.get("DiskUsage_RAW", i.get("DiskUsage"))
         usage_memory = i.get("MemoryUsage_RAW", i.get("MemoryUsage"))
-        skip_usages = None in [usage_disk, usage_memory]:
+        skip_usages = None in [usage_disk, usage_memory]
 
         if not skip_requests:
             total_jobs = requests.get("TotalJobs", 0)
