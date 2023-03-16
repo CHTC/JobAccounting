@@ -229,7 +229,7 @@ class OsgScheddJobDistroFilter(BaseFilter):
 
         if not skip_requests:
             total_jobs = requests.get("TotalJobs", 0)
-            usages["TotalJobs"] = total_jobs + 1
+            requests["TotalJobs"] = total_jobs + 1
             # Filter out jobs that request more than one core
             if i.get("RequestCpus", 1) > 1:
                 return
@@ -242,7 +242,7 @@ class OsgScheddJobDistroFilter(BaseFilter):
             requests["SingleCoreJobs"] = jobs + 1
 
         if not skip_usages:
-            total_jobs = requests.get("TotalJobs", 0)
+            total_jobs = usages.get("TotalJobs", 0)
             usages["TotalJobs"] = total_jobs + 1
             # Filter out jobs that request more than one core
             if i.get("RequestCpus", 1) > 1:
