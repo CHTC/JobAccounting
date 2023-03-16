@@ -231,29 +231,27 @@ class OsgScheddJobDistroFilter(BaseFilter):
             total_jobs = requests.get("TotalJobs", 0)
             requests["TotalJobs"] = total_jobs + 1
             # Filter out jobs that request more than one core
-            if i.get("RequestCpus", 1) > 1:
-                return
-            histogram = requests.get("Histogram", defaultdict(int))
-            q_request_disk = self.quantize_disk(request_disk)
-            q_request_memory = self.quantize_memory(request_memory)
-            histogram[(q_request_disk, q_request_memory)] += 1
-            requests["Histogram"] = histogram
-            jobs = requests.get("SingleCoreJobs", 0)
-            requests["SingleCoreJobs"] = jobs + 1
+            if not i.get("RequestCpus", 1) > 1:
+                histogram = requests.get("Histogram", defaultdict(int))
+                q_request_disk = self.quantize_disk(request_disk)
+                q_request_memory = self.quantize_memory(request_memory)
+                histogram[(q_request_disk, q_request_memory)] += 1
+                requests["Histogram"] = histogram
+                jobs = requests.get("SingleCoreJobs", 0)
+                requests["SingleCoreJobs"] = jobs + 1
 
         if not skip_usages:
             total_jobs = usages.get("TotalJobs", 0)
             usages["TotalJobs"] = total_jobs + 1
             # Filter out jobs that request more than one core
-            if i.get("RequestCpus", 1) > 1:
-                return
-            histogram = usages.get("Histogram", defaultdict(int))
-            q_usage_disk = self.quantize_disk(usage_disk)
-            q_usage_memory = self.quantize_memory(usage_memory)
-            histogram[(q_usage_disk, q_usage_memory)] += 1
-            usages["Histogram"] = histogram
-            jobs = usages.get("SingleCoreJobs", 0)
-            usages["SingleCoreJobs"] = jobs + 1
+            if not i.get("RequestCpus", 1) > 1:
+                histogram = usages.get("Histogram", defaultdict(int))
+                q_usage_disk = self.quantize_disk(usage_disk)
+                q_usage_memory = self.quantize_memory(usage_memory)
+                histogram[(q_usage_disk, q_usage_memory)] += 1
+                usages["Histogram"] = histogram
+                jobs = usages.get("SingleCoreJobs", 0)
+                usages["SingleCoreJobs"] = jobs + 1
 
 
     def get_filters(self):
