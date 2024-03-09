@@ -1,10 +1,13 @@
 import os
 import sys
 import argparse
-from .functions import get_timestamps
+
+from pathlib import Path
+
 import accounting.filters as _filters
 import accounting.formatters as _formatters
-from pathlib import Path
+from .functions import get_timestamps
+
 
 FILTERS = [x for x in dir(_filters) if x[0] != "_"]
 FORMATTERS = [x for x in dir(_formatters) if x[0] != "_"]
@@ -158,6 +161,22 @@ def parse_args(args_in=sys.argv[1:]):
         dest="reply_to_addr",
         help="Reply-To: email address",
     )
+    parser.add_argument(
+        "--smtp_server",
+        metavar="SERVER",
+        help="Use this explicit SMTP server",
+    )
+    parser.add_argument(
+        "--smtp_username",
+        metavar="USERNAME",
+        help="Username for SMTP server (requires --smtp_server)",
+    )
+    parser.add_argument(
+        "--smtp_password_file",
+        metavar="PATH",
+        type=Path,
+        help="File containing password for --smtp_username",
+    )
     args = parser.parse_args(args_in)
 
     # Get filter and formatter classes
@@ -185,6 +204,7 @@ def parse_args(args_in=sys.argv[1:]):
     (args.start_ts, args.end_ts) = get_timestamps(args.report_period, args.start_ts, args.end_ts)
 
     return args
+
 
 if __name__ == "__main__":
     args = vars(parse_args())

@@ -1,10 +1,8 @@
-import os
 import sys
 from datetime import datetime, timedelta
 import logging
 import csv
 import smtplib
-import dns.resolver
 import time
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
@@ -12,6 +10,7 @@ from email.mime.text  import MIMEText
 from email.mime.base import MIMEBase
 from email.utils import formatdate
 from email import encoders
+from dns.resolver import query as dns_query
 
 
 def get_timestamps(report_period, start_ts, end_ts):
@@ -19,7 +18,7 @@ def get_timestamps(report_period, start_ts, end_ts):
         raise ValueError("START_TS and END_TS cannot be None when REPORT_PERIOD is custom")
     if report_period != "custom" and None not in (start_ts, end_ts):
         raise ValueError("REPORT_PERIOD must be custom if both START_TS and END_TS defined")
-    
+
     if report_period == "custom":
         return (start_ts, end_ts)
 
@@ -34,7 +33,7 @@ def get_timestamps(report_period, start_ts, end_ts):
         end_dt = datetime(end_dt.year, end_dt.month, end_dt.day)
         sign = -1
         ts0 = end_dt.timestamp()
-        
+
     if report_period == "daily":
         ts1 = ts0 + sign*timedelta(days=1).total_seconds()
     elif report_period == "weekly":
@@ -62,7 +61,7 @@ def write_csv(table, filter_name, table_name, start_ts, report_period, csv_dir, 
     #   3. Date (Starting + Reporting Period or Starting + Ending)
     filter_name = filter_name.replace(" ", "-")
     table_name = table_name.replace(" ", "-")
-    
+
     # Format date(s)
     start = datetime.fromtimestamp(start_ts)
     if report_period in ["daily", "weekly", "monthly"]:
@@ -89,7 +88,54 @@ def write_csv(table, filter_name, table_name, start_ts, report_period, csv_dir, 
     return filepath
 
 
-def send_email(subject, from_addr, to_addrs, cc_addrs, bcc_addrs, reply_to_addr, html, table_files=[], **kwargs):
+def _smtp_mail(msg, recipient, smtp_server=None, smtp_username=None, smtp_password=None):
+    logger = logging.getLogger("accounting.send_email")
+    sent = False
+    result = None
+    tries = 0
+    sleeptime = 0
+    while tries < 3 and sleeptime < 600:
+        try:
+            logger.debug(f"Connecting to mailserver {smtp_server}")
+            if smtp_username is None:
+                smtp = smtplib.SMTP(smtp_server)
+            else:
+                smtp = smtplib.SMTP_SSL(smtp_server)
+                smtp.login(smtp_username, smtp_password)
+        except Exception:
+            logger.error(f"Could not connect to {smtp_server}")
+            continue
+
+        try:
+            logger.debug(f"Sending email to {recipient}")
+            result = smtp.sendmail(msg["From"], recipient, msg.as_string())
+            if len(result) > 0:
+                logger.error(f"Could not send email to {recipient} using {smtp_server}:\n{result}")
+            else:
+                sent = True
+        except Exception:
+            logger.exception(f"Could not send to {recipient} using {smtp_server}")
+        finally:
+            try:
+                smtp.quit()
+            except smtplib.SMTPServerDisconnected:
+                pass
+        if sent:
+            break
+
+        sleeptime = int(min(30 * 1.5**tries, 600))
+        logger.info(f"Sleeping for {sleeptime} seconds before retrying servers")
+        time.sleep(sleeptime)
+        tries += 1
+
+    else:
+        logger.error(f"Failed to send email after {tries} loops")
+
+    return sent
+
+
+def send_email(subject, from_addr, to_addrs, cc_addrs, bcc_addrs, reply_to_addr, html,
+               table_files=[], smtp_server=None, smtp_username=None, smtp_password_file=None, **kwargs):
     logger = logging.getLogger("accounting.send_email")
     if len(to_addrs) == 0:
         logger.error("No recipients in the To: field, not sending email")
@@ -110,7 +156,7 @@ def send_email(subject, from_addr, to_addrs, cc_addrs, bcc_addrs, reply_to_addr,
     msg["Date"] = formatdate(localtime=True)
 
     msg.attach(MIMEText(html, "html"))
-    
+
     for fname in table_files:
         fpath = Path(fname)
         part = MIMEBase("application", "octet-stream")
@@ -120,52 +166,30 @@ def send_email(subject, from_addr, to_addrs, cc_addrs, bcc_addrs, reply_to_addr,
         part.add_header("Content-Disposition", "attachment", filename = fpath.name)
         msg.attach(part)
 
-    for recipient in to_addrs + cc_addrs + bcc_addrs:
-        domain = recipient.split("@")[1]
-        sent = False
-        result = None
-        tries = 0
-        sleeptime = 0
-        while tries < 3 and sleeptime < 600:
-            for mxi, mx in enumerate(dns.resolver.query(domain, "MX")):
-                mailserver = str(mx).split()[1][:-1]
+    if smtp_server is not None:
+        recipient = list(set(to_addrs + cc_addrs + bcc_addrs))
+        smtp_password = None
+        if smtp_password_file is not None:
+            smtp_password = smtp_password_file.open("r").read().strip()
+        _smtp_mail(msg, recipient, smtp_server, smtp_username, smtp_password)
+
+    else:
+        for recipient in set(to_addrs + cc_addrs + bcc_addrs):
+            domain = recipient.split("@")[1]
+            sent = False
+            for mxi, mx in enumerate(dns_query(domain, "MX")):
+                smtp_server = str(mx).split()[1][:-1]
 
                 try:
-                    logger.debug(f"Connecting to mailserver {mailserver}")
-                    smtp = smtplib.SMTP(mailserver)
+                    sent = _smtp_mail(msg, recipient, smtp_server)
                 except Exception:
-                    logger.error(f"Could not connect to {mailserver}")
                     continue
-
-                try:
-                    logger.debug(f"Sending email to {recipient}")
-                    result = smtp.sendmail(from_addr, recipient, msg.as_string())
-                    if len(result) > 0:
-                        logger.error(f"Could not send email to {recipient} using {mailserver}:\n{result}")
-                    else:
-                        sent = True
-                except Exception as e:
-                    logger.exception(f"Could not send to {recipient} using {mailserver}")
-                finally:
-                    try:
-                        smtp.quit()
-                    except smtplib.SMTPServerDisconnected:
-                        pass
-
                 if sent:
                     break
-                else:
-                    sleeptime = int(min(30 * 1.5**mxi, 600))
-                    logger.info(f"Sleeping for {sleeptime} seconds before trying next server")
-                    time.sleep(sleeptime)
 
-            if sent:
-                break
-            else:
-                sleeptime = int(min(30 * 1.5**tries * 1.5**mxi, 600))
-                logger.info(f"Sleeping for {sleeptime} seconds before retrying servers")
+                sleeptime = int(min(30 * 1.5**mxi, 600))
+                logger.info(f"Sleeping for {sleeptime} seconds before trying next server")
                 time.sleep(sleeptime)
-                tries += 1
 
-        else:
-            logger.error(f"Failed to send email after {tries} loops")
+            else:
+                logger.error("Failed to send email after trying all servers")

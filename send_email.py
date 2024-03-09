@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 
-import os; os.environ["CONDOR_CONFIG"] = "/dev/null"  # squelch warning
+import os
 import sys
-from datetime import timedelta
 import time
+import pickle
+import logging
+import logging.handlers
+
+from traceback import print_exc
+from pathlib import Path
+
 import elasticsearch
+
+# squelch warnings when importing htcondor
+os.environ["CONDOR_CONFIG"] = os.environ.get("CONDOR_CONFIG", "/dev/null")
 import accounting
 from accounting.push_totals_to_es import push_totals_to_es
-import pickle
-from traceback import print_exc, print_tb
-import logging, logging.handlers
-from pathlib import Path
 
 args = accounting.parse_args(sys.argv[1:])
 
@@ -93,7 +98,6 @@ try:
 except Exception:
     logger.exception("Caught exception while sending email")
     if args.quiet:
-        print_tb(file=sys.stderr)
         print_exc(file=sys.stderr)
 
 if args.report_period in ["daily", "weekly", "monthly"] and not args.do_not_upload:
