@@ -566,6 +566,7 @@ class ChtcScheddCpuFilter(BaseFilter):
         row["Num Local Univ Jobs"] = sum(data["_NumLocalUnivJobs"])
         row["Num Sched Univ Jobs"] = sum(data["_NumSchedulerUnivJobs"])
         row["Num Ckpt Able Jobs"] = sum(data["_NumCkptJobs"])
+        row["Num S'ty Jobs"]    = len(self.clean(data["SingularityImage"]))
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
