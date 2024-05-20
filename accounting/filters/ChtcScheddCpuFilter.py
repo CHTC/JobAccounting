@@ -5,20 +5,25 @@ from .BaseFilter import BaseFilter
 
 
 DEFAULT_COLUMNS = {
-    10: "All CPU Hours",
-    20: "Num Uniq Job Ids",
+    10: "Num Uniq Job Ids",
+    20: "All CPU Hours",
     30: "% Good CPU Hours",
 
     45: "% Ckpt Able",
     50: "% Rm'd Jobs",
+    51: "Total Files Xferd",
+    52: "OSDF Files Xferd",
+    53: "% OSDF Files",
+    54: "% OSDF Bytes",
+    55: "Shadw Starts / Job Id",
+    56: "Exec Atts / Shadw Start",
+    57: "Holds / Job Id",
+
     60: "% Short Jobs",
     70: "% Jobs w/>1 Exec Att",
     80: "% Jobs w/1+ Holds",
-    83: "Total Files Xferd",
-
-    85: "Shadw Starts / Job Id",
-    90: "Exec Atts / Shadw Start",
-    95: "Holds / Job Id",
+    81: "% Jobs Over Rqst Disk",
+    82: "% Jobs using S'ty",
 
     100: "Mean Actv Hrs",
     105: "Mean Setup Secs",
@@ -39,11 +44,6 @@ DEFAULT_COLUMNS = {
 #    191: "Output MB / Job",
 #    192: "Output MB / File",
 
-    200: "Max Rqst Mem MB",
-    210: "Med Used Mem MB",
-    220: "Max Used Mem MB",
-    230: "Max Rqst Cpus",
-
     300: "Good CPU Hours",
     305: "CPU Hours / Bad Exec Att",
     310: "Num Exec Atts",
@@ -53,10 +53,19 @@ DEFAULT_COLUMNS = {
     340: "Num DAG Node Jobs",
     350: "Num Jobs w/>1 Exec Att",
     355: "Num Jobs w/1+ Holds",
+    357: "Num Jobs Over Rqst Disk",
     360: "Num Short Jobs",
     370: "Num Local Univ Jobs",
     380: "Num Sched Univ Jobs",
     390: "Num Ckpt Able Jobs",
+    400: "Num S'ty Jobs",
+
+    500: "Max Rqst Mem MB",
+    510: "Med Used Mem MB",
+    520: "Max Used Mem MB",
+    525: "Max Rqst Disk GB",
+    527: "Max Used Disk GB",
+    530: "Max Rqst Cpus",
 }
 
 
@@ -65,10 +74,12 @@ DEFAULT_FILTER_ATTRS = [
     "CommittedTime",
     "RequestCpus",
     "RequestMemory",
+    "RequestDisk",
     "RecordTime",
     "JobStartDate",
     "JobCurrentStartDate",
     "MemoryUsage",
+    "DiskUsage",
     "NumJobStarts",
     "NumShadowStarts",
     "NumHolds",
@@ -77,11 +88,12 @@ DEFAULT_FILTER_ATTRS = [
     "EnteredCurrentStatus",
     "BytesSent",
     "BytesRecvd",
-    "lastremotewallclocktime",
-    "transferinputstats",
-    "transferoutputstats",
-    "activationduration",
-    "activationsetupduration",
+    "TransferInputStats",
+    "TransferOutputStats",
+    "SingularityImage",
+    "ActivationDuration",
+    "ActivationSetupDuration",
+    "CondorVersion",
 ]
 
 
@@ -423,6 +435,8 @@ class ChtcScheddCpuFilter(BaseFilter):
         output_files_total_count = []
         output_files_total_bytes = []
         output_files_total_job_stops = []
+        osdf_files_count = 0
+        osdf_bytes_total = 0
         for (
                 job_status,
                 job_universe,
@@ -464,6 +478,10 @@ class ChtcScheddCpuFilter(BaseFilter):
                     continue
                 got_cedar_bytes = False
                 for attr in input_stats:
+                    if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
+                        osdf_files_count += input_stats[attr]
+                    if attr.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
+                        osdf_bytes_total += input_stats[attr]
                     if attr.casefold().endswith("FilesCountTotal".casefold()):
                         input_files_count += input_stats[attr]
                     elif attr.casefold().endswith("SizeBytesTotal".casefold()):
@@ -492,6 +510,10 @@ class ChtcScheddCpuFilter(BaseFilter):
                     continue
                 got_cedar_bytes = False
                 for attr in output_stats:
+                    if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
+                        osdf_files_count += output_stats[attr]
+                    if attr.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
+                        osdf_bytes_total += output_stats[attr]
                     if attr.casefold().endswith("FilesCountTotal".casefold()):
                         output_files_count += output_stats[attr]
                     elif attr.casefold().endswith("SizeBytesTotal".casefold()):
@@ -525,6 +547,8 @@ class ChtcScheddCpuFilter(BaseFilter):
         row["All CPU Hours"]    = sum(self.clean(total_cpu_time)) / 3600
         row["Good CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
+        row["Num Jobs Over Rqst Disk"] = sum([(usage or 0) > (request or 1)
+            for (usage, request) in zip(data["DiskUsage"], data["RequestDisk"])])
         row["Num DAG Node Jobs"] = sum(data['_NumDAGNodes'])
         row["Num Rm'd Jobs"]    = sum([status == 3 for status in data["JobStatus"]])
         row["Num Job Holds"]    = sum(self.clean(data["NumHolds"]))
@@ -534,6 +558,8 @@ class ChtcScheddCpuFilter(BaseFilter):
         row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
         row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
         row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
+        row["Max Rqst Disk GB"] = max(self.clean(data["RequestDisk"], allow_empty_list=False)) / (1000*1000)
+        row["Max Used Disk GB"] = max(self.clean(data["DiskUsage"], allow_empty_list=False)) / (1000*1000)
         row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
         row["Num Exec Atts"]    = sum(self.clean(num_exec_attempts))
         row["Num Shadw Starts"] = sum(self.clean(num_shadow_starts))
@@ -552,15 +578,19 @@ class ChtcScheddCpuFilter(BaseFilter):
             row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
+            row["% Jobs Over Rqst Disk"] = 100 * row["Num Jobs Over Rqst Disk"] / row["Num Uniq Job Ids"]
             row["% Jobs w/>1 Exec Att"] = 100 * row["Num Jobs w/>1 Exec Att"] / row["Num Uniq Job Ids"]
             row["% Jobs w/1+ Holds"] = 100 * row["Num Jobs w/1+ Holds"] / row["Num Uniq Job Ids"]
+            row["% Jobs using S'ty"] = 100 * row["Num S'ty Jobs"] / row["Num Uniq Job Ids"]
         else:
             row["Shadw Starts / Job Id"] = 0
             row["Holds / Job Id"] = 0
             row["% Rm'd Jobs"] = 0
             row["% Short Jobs"] = 0
+            row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs w/>1 Exec Att"] = 0
             row["% Jobs w/1+ Holds"] = 0
+            row["% Jobs using S'ty"] = 0
         if row["Num Shadw Starts"] > 0:
             row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
         else:
@@ -571,10 +601,15 @@ class ChtcScheddCpuFilter(BaseFilter):
             row["CPU Hours / Bad Exec Att"] = 0
 
         # File transfer stats
+        total_files = 0
+        total_bytes = 0
         if any(input_files_total_job_starts):
             exec_atts = sum(self.clean(input_files_total_job_starts))
             input_files = sum(self.clean(input_files_total_count))
             input_mb = sum(self.clean(input_files_total_bytes)) / 1e6
+
+            total_files += input_files
+            total_bytes += input_mb * 1e6
 
             row["Total Input Files"] = input_files
             if exec_atts > 0:
@@ -589,6 +624,9 @@ class ChtcScheddCpuFilter(BaseFilter):
             output_files = sum(self.clean(output_files_total_count))
             output_mb = sum(self.clean(output_files_total_bytes)) / 1e6
 
+            total_files += output_files
+            total_bytes += output_mb * 1e6
+
             row["Total Ouptut Files"] = output_files
             if exec_ends > 0:
                 row["Output Files / Job"] = output_files / exec_ends
@@ -596,6 +634,23 @@ class ChtcScheddCpuFilter(BaseFilter):
             if output_files > 0:
                 row["Output MB / File"] = output_mb / output_files
                 row["Total Files Xferd"] = row.get("Total Files Xferd", 0) + output_files
+
+        if osdf_files_count == 0 or osdf_bytes_total == 0:
+            condor_versions_set = set(data["CondorVersion"])
+            condor_versions_tuples_list = []
+            for version in condor_versions_set:
+                condor_versions_tuples_list.append(tuple([int(x) for x in version.split()[1].split(".")]))
+            if all(condor_version_tuple < (9, 7, 0) for condor_version_tuple in condor_versions_tuples_list):
+                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = "-"
+            else:
+                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0                    
+        else:
+            row["OSDF Files Xferd"] = osdf_files_count or ""
+            if osdf_files_count > 0 and osdf_bytes_total > 0 and total_files > 0 and total_bytes > 0:
+                row["% OSDF Files"] = 100 * osdf_files_count / total_files
+                row["% OSDF Bytes"] = 100 * osdf_bytes_total / total_bytes
+            else:
+                row["% OSDF Files"] = row["% OSDF Bytes"] = ""
 
         # Insert missing value if any missing
         for key in ["Total Files Xferd", "Total Input Files", "Total Output Files",
