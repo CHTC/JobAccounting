@@ -638,10 +638,10 @@ class ChtcScheddCpuFilter(BaseFilter):
 
         if osdf_files_count == 0 or osdf_bytes_total == 0:
             condor_versions_set = set(data["CondorVersion"])
+            condor_versions_set.discard(None)
             condor_versions_tuples_list = []
             for version in condor_versions_set:
-                if not version is None:
-                    condor_versions_tuples_list.append(tuple([int(x) for x in version.split()[1].split(".")]))
+                condor_versions_tuples_list.append(tuple([int(x) for x in version.split()[1].split(".")]))
             if all(condor_version_tuple < (9, 7, 0) for condor_version_tuple in condor_versions_tuples_list):
                 row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = "-"
             else:
