@@ -9,20 +9,28 @@ from .BaseFilter import BaseFilter
 MAX_INT = 2**62
 
 DEFAULT_COLUMNS = {
-    10: "All CPU Hours",
-    20: "Num Uniq Job Ids",
+    10: "Num Uniq Job Ids",
+    20: "All CPU Hours",
     30: "% Good CPU Hours",
 
     45: "% Ckpt Able",
     50: "% Rm'd Jobs",
+    51: "Total Files Xferd",
+    52: "OSDF Files Xferd",
+    53: "% OSDF Files",
+    54: "% OSDF Bytes",
+    55: "Shadw Starts / Job Id",
+    56: "Exec Atts / Shadw Start",
+    57: "Holds / Job Id",
+
     60: "% Short Jobs",
     70: "% Jobs w/>1 Exec Att",
     80: "% Jobs w/1+ Holds",
-    83: "Total Files Xferd",
+    81: "% Jobs Over Rqst Disk",
+    82: "% Jobs using S'ty",
 
-    85: "Shadw Starts / Job Id",
-    90: "Exec Atts / Shadw Start",
-    95: "Holds / Job Id",
+    100: "Mean Actv Hrs",
+    105: "Mean Setup Secs",
 
     110: "Min Hrs",
     150: "Max Hrs",
@@ -35,10 +43,6 @@ DEFAULT_COLUMNS = {
 #    191: "Output MB / Job",
 #    192: "Output MB / File",
 
-    200: "Max Rqst Mem MB",
-    220: "Max Used Mem MB",
-    230: "Max Rqst Cpus",
-
     300: "Good CPU Hours",
     305: "CPU Hours / Bad Exec Att",
     310: "Num Exec Atts",
@@ -48,15 +52,27 @@ DEFAULT_COLUMNS = {
     340: "Num DAG Node Jobs",
     350: "Num Jobs w/>1 Exec Att",
     355: "Num Jobs w/1+ Holds",
+    357: "Num Jobs Over Rqst Disk",
     360: "Num Short Jobs",
     370: "Num Local Univ Jobs",
     380: "Num Sched Univ Jobs",
     390: "Num Ckpt Able Jobs",
+    400: "Num S'ty Jobs",
+
+    500: "Max Rqst Mem MB",
+    520: "Max Used Mem MB",
+    525: "Max Rqst Disk GB",
+    527: "Max Used Disk GB",
+    530: "Max Rqst Cpus",
 }
 
 
 class ChtcScheddCpuMonthlyFilter(BaseFilter):
     name = "CHTC schedd job history"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.sort_col = "Num Uniq Job Ids"
 
     def get_query(self, index, start_ts, end_ts, **kwargs):
         # Returns dict matching Elasticsearch.search() kwargs
@@ -94,10 +110,18 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         is_exec = i.get("NumJobStarts", 0) >= 1
         is_multiexec = i.get("NumJobStarts", 0) > 1
         has_holds = i.get("NumHolds", 0) > 0
+        is_over_rqst_disk = i.get("DiskUsage") > i.get("RequestDisk")
+        is_singularity_job = i.get("SingularityImage") is not None
+        has_activation_duration = i.get("activationdurtion") is not None
+        activation_duration = i.get("activationdurtion")
+        has_activation_setup_duration = i.get("activationsetupduration") is not None
+        activation_setup_duration = i.get("activationsetupduration")
         is_short = False
         is_long = False
         is_ckptable = False
         goodput_time = 0
+        osdf_files_count = 0
+        osdf_bytes_total = 0
         if has_shadow and not is_removed:
             goodput_time = int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 0))))
             if goodput_time > 0 and goodput_time < 60:
@@ -112,7 +136,9 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         elif not is_removed:
             goodput_time = int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 0))))
         input_files = 0
+        input_files_bytes = 0
         output_files = 0
+        output_files_bytes = 0
         if has_shadow and not is_site:
             is_ckptable = ((
                     i.get("WhenToTransferOutput", "").upper() == "ON_EXIT_OR_EVICT" and
@@ -138,11 +164,23 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
                 output_file_stats = {}
 
             for key, value in input_file_stats.items():
+                if key.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
+                    osdf_files_count += value
+                if key.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
+                    osdf_bytes_total += value
                 if key.casefold().endswith("FilesCountTotal".casefold()):
                     input_files += value
+                elif key.casefold().endswith("SizeBytesTotal".casefold()):
+                    intput_files_bytes += value
             for key, value in output_file_stats.items():
+                if key.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
+                    osdf_files_count += value
+                if key.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
+                    osdf_bytes_total += value
                 if key.casefold().endswith("FilesCountTotal".casefold()):
                     output_files += value
+                elif key.casefold().endswith("SizeBytesTotal".casefold()):
+                    output_files_bytes += value
         long_job_wallclock_time = int(is_long) * i.get("LastRemoteWallClockTime", i.get("CommittedTime", 60))
 
         sum_cols = {}
@@ -157,6 +195,14 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["LongJobs"] = int(is_long)
         sum_cols["ShadowJobs"] = int(has_shadow)
         sum_cols["Checkpointable"] = int(is_ckptable)
+        sum_cols["OSDFFilesXferd"] = int(osdf_files_count)
+        sum_cols["OSDFBytesXferd"] = int(osdf_bytes_total)
+        sum_cols["JobsOverRqstDisk"] = int(is_over_rqst_disk)
+        sum_cols["SingularityJobs"] = int(is_singularity_job)
+        sum_cols["TotalActivationDuration"] = int(has_activation_duration)
+        sum_cols["ActivationDurationJobs"] = int(activation_duration)
+        sum_cols["ActivationSetupDurationJobs"] = int(has_activation_setup_duration)
+        sum_cols["TotalActivationSetupDuration"] = int(activation_setup_duration)
 
         sum_cols["TotalLongJobWallClockTime"] = long_job_wallclock_time
         sum_cols["GoodCpuTime"] = (goodput_time * max(i.get("RequestCpus", 1), 1))
@@ -167,6 +213,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["NumBadJobStarts"] = int(has_shadow) * max(i.get("NumJobStarts", 0) - 1, 0)
         sum_cols["HeldJobs"] = int(has_holds)
         sum_cols["NumJobHolds"] = i.get("NumHolds", 0)
+
         if input_files > 0:
             sum_cols["InputFiles"] = input_files
         if output_files > 0:
@@ -174,10 +221,19 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         if input_files > 0 or output_files > 0:
             sum_cols["TotalFiles"] = input_files + output_files
 
+        if input_files_bytes > 0:
+            sum_cols["InputFilesBytes"] = input_files_bytes
+        if output_files_bytes > 0:
+            sum_cols["OutputFilesBytes"] = output_files_bytes
+        if input_files_bytes > 0 or output_files_bytes > 0:
+            sum_cols["TotalFilesBytes"] = input_files_bytes + output_files_bytes
+
         max_cols = {}
         max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
         max_cols["MaxRequestMemory"] = i.get("RequestMemory", 0)
         max_cols["MaxMemoryUsage"] = i.get("MemoryUsage", 0)
+        max_cols["MaxRequestDisk"] = i.get("RequestDisk", 0)
+        max_cols["MaxDiskUsage"] = i.get("DiskUsage", 0)
         max_cols["MaxRequestCpus"] = i.get("RequestCpus", 1)
 
         min_cols = {}
@@ -281,15 +337,19 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         row["Num Uniq Job Ids"]  = data["Jobs"]
         row["Good CPU Hours"]    = data["GoodCpuTime"] / 3600
 
+        row["OSDF Files Xferd"]  = data["OSDFFilesXferd"]
         row["Num DAG Node Jobs"] = data["DAGNodeJobs"]
         row["Num Rm'd Jobs"]     = data["RmJobs"]
         row["Num Jobs w/>1 Exec Att"] = data["MultiExecJobs"]
         row["Num Jobs w/1+ Holds"] = data["HeldJobs"]
+        row["Num Jobs Over Rqst Disk"] = data["JobsOverRqstDisk"]
         row["Total Files Xferd"] = data.get("TotalFiles", "")
 
         row["Num Short Jobs"]      = data["ShortJobs"]
         row["Max Rqst Mem MB"]     = data["MaxRequestMemory"]
         row["Max Used Mem MB"]     = data["MaxMemoryUsage"]
+        row["Max Rqst Disk GB"]    = data["MaxRequestDisk"] / (1000*1000)
+        row["Max Used Disk GB"]    = data["MaxDiskUsage"] / (1000*1000)
         row["Max Rqst Cpus"]       = data["MaxRequestCpus"]
         row["Num Exec Atts"]       = data["NumJobStarts"]
         row["Num Shadw Starts"]    = data["NumShadowStarts"]
@@ -297,6 +357,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         row["Num Local Univ Jobs"] = data["LocalJobs"]
         row["Num Sched Univ Jobs"] = data["SchedulerJobs"]
         row["Num Ckpt Able Jobs"]  = data["Checkpointable"]
+        row["Num S'ty Jobs"]       = data["SingularityJobs"]
 
         if data["NumJobStarts"] > 0 and data.get("InputFiles") is not None:
             row["Input Files / Exec Att"] = data["InputFiles"] / data["NumJobStarts"]
@@ -306,6 +367,16 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             row["Output Files / Job"] = data["OutputFiles"] / data["ShadowJobs"]
         else:
             row["Output Files / Job"] = ""
+
+        if data["TotalFiles"] > 0:
+            row["% OSDF Files"] = data["OSDFFilesXferd"] / data["TotalFiles"]
+        else:
+            row["% OSDF Files"] = 0
+
+        if data["TotalFilesBytes"] > 0:
+            row["% OSDF Bytes"] = ["OSDFBytesXferd"] / data["TotalFilesBytes"]
+        else:
+            row["% OSDF Bytes"] = 0
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
@@ -320,11 +391,15 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             row["% Jobs w/1+ Holds"] = 100 * row["Num Jobs w/1+ Holds"] / row["Num Uniq Job Ids"]
             row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
             row["% Ckpt Able"] = 100 * row["Num Ckpt Able Jobs"] / row["Num Uniq Job Ids"]
+            row["% Jobs Over Rqst Disk"] = 100 * row["Num Jobs Over Rqst Disk"] / row["Num Uniq Job Ids"]
+            row["% Jobs using S'ty"] = 100 * row["Num S'ty Jobs"] / row["Num Uniq Job Ids"]
         else:
             row["Shadw Starts / Job Id"] = 0
             row["% Rm'd Jobs"] = 0
             row["% Short Jobs"] = 0
             row["% Jobs w/>1 Exec Att"] = 0
+            row["% Jobs Over Rqst Disk"] = 0
+            row["% Jobs using S'ty"] = 0
         if row["Num Shadw Starts"] > 0:
             row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
         else:
@@ -340,6 +415,15 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
         else:
             row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
+
+        if data["ActivationDurationJobs"] > 0:
+            row["Mean Actv Hrs"] = data["TotalActivationDuration"] / data["ActivationDurationJobs"] / 3600
+        else:
+            row["Mean Actv Hrs"] = 0
+        if data["ActivationSetupDurationJobs"] > 0:
+            row["Mean Setup Secs"] = data["TotalActivationSetupDuration"] / data["ActivationSetupDurationJobs"]
+        else:
+            row["Mean Setup Secs"] = 0
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
