@@ -113,9 +113,15 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         is_over_rqst_disk = i.get("DiskUsage") > i.get("RequestDisk")
         is_singularity_job = i.get("SingularityImage") is not None
         has_activation_duration = i.get("activationdurtion") is not None
-        activation_duration = i.get("activationdurtion")
+        if has_activation_duration:
+            activation_duration = i.get("activationdurtion")
+        else:
+            activation_duration = 0
         has_activation_setup_duration = i.get("activationsetupduration") is not None
-        activation_setup_duration = i.get("activationsetupduration")
+        if has_activation_duration:
+            activation_setup_duration = i.get("activationsetupduration")
+        else:
+            activation_setup_duration = 0
         is_short = False
         is_long = False
         is_ckptable = False
@@ -171,7 +177,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
                 if key.casefold().endswith("FilesCountTotal".casefold()):
                     input_files += value
                 elif key.casefold().endswith("SizeBytesTotal".casefold()):
-                    intput_files_bytes += value
+                    input_files_bytes += value
             for key, value in output_file_stats.items():
                 if key.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
                     osdf_files_count += value
