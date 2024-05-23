@@ -112,9 +112,9 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         has_holds = i.get("NumHolds", 0) > 0
         is_over_rqst_disk = i.get("DiskUsage") > i.get("RequestDisk")
         is_singularity_job = i.get("SingularityImage") is not None
-        has_activation_duration = i.get("activationdurtion") is not None
+        has_activation_duration = i.get("activationduration") is not None
         if has_activation_duration:
-            activation_duration = i.get("activationdurtion")
+            activation_duration = i.get("activationduration")
         else:
             activation_duration = 0
         has_activation_setup_duration = i.get("activationsetupduration") is not None
@@ -162,10 +162,10 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             except SyntaxError:
                 input_file_stats = {}
             try:
-                transfeoutputstats = i.get("transfeoutputstats", "{}")
-                if transfeoutputstats.endswith("..."):
-                    transfeoutputstats = f"{transfeoutputstats[:transfeoutputstats.rindex(',')]}}}"
-                output_file_stats = literal_eval(i.get("transfeoutputstats", "{}"))
+                transferoutputstats = i.get("transferoutputstats", "{}")
+                if transferoutputstats.endswith("..."):
+                    transferoutputstats = f"{transferoutputstats[:transferoutputstats.rindex(',')]}}}"
+                output_file_stats = literal_eval(i.get("transferoutputstats", "{}"))
             except SyntaxError:
                 output_file_stats = {}
 
@@ -205,8 +205,8 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["OSDFBytesXferd"] = int(osdf_bytes_total)
         sum_cols["JobsOverRqstDisk"] = int(is_over_rqst_disk)
         sum_cols["SingularityJobs"] = int(is_singularity_job)
-        sum_cols["TotalActivationDuration"] = int(has_activation_duration)
-        sum_cols["ActivationDurationJobs"] = int(activation_duration)
+        sum_cols["ActivationDurationJobs"] = int(has_activation_duration)
+        sum_cols["TotalActivationDuration"] = int(activation_duration)
         sum_cols["ActivationSetupDurationJobs"] = int(has_activation_setup_duration)
         sum_cols["TotalActivationSetupDuration"] = int(activation_setup_duration)
 
@@ -220,19 +220,13 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["HeldJobs"] = int(has_holds)
         sum_cols["NumJobHolds"] = i.get("NumHolds", 0)
 
-        if input_files > 0:
-            sum_cols["InputFiles"] = input_files
-        if output_files > 0:
-            sum_cols["OutputFiles"] = output_files
-        if input_files > 0 or output_files > 0:
-            sum_cols["TotalFiles"] = input_files + output_files
+        sum_cols["InputFiles"] = input_files
+        sum_cols["OutputFiles"] = output_files
+        sum_cols["TotalFiles"] = input_files + output_files
 
-        if input_files_bytes > 0:
-            sum_cols["InputFilesBytes"] = input_files_bytes
-        if output_files_bytes > 0:
-            sum_cols["OutputFilesBytes"] = output_files_bytes
-        if input_files_bytes > 0 or output_files_bytes > 0:
-            sum_cols["TotalFilesBytes"] = input_files_bytes + output_files_bytes
+        sum_cols["InputFilesBytes"] = input_files_bytes
+        sum_cols["OutputFilesBytes"] = output_files_bytes
+        sum_cols["TotalFilesBytes"] = input_files_bytes + output_files_bytes
 
         max_cols = {}
         max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
@@ -380,7 +374,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             row["% OSDF Files"] = 0
 
         if data["TotalFilesBytes"] > 0:
-            row["% OSDF Bytes"] = ["OSDFBytesXferd"] / data["TotalFilesBytes"]
+            row["% OSDF Bytes"] = data["OSDFBytesXferd"] / data["TotalFilesBytes"]
         else:
             row["% OSDF Bytes"] = 0
 
@@ -423,7 +417,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
 
         if data["ActivationDurationJobs"] > 0:
-            row["Mean Actv Hrs"] = data["TotalActivationDuration"] / data["ActivationDurationJobs"] / 3600
+            row["Mean Actv Hrs"] = (data["TotalActivationDuration"] / data["ActivationDurationJobs"]) / 3600
         else:
             row["Mean Actv Hrs"] = 0
         if data["ActivationSetupDurationJobs"] > 0:
@@ -491,7 +485,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             rows.append(tuple(row[col] for col in columns_sorted))
 
         # Sort rows by All CPU Hours
-        rows.sort(reverse=True, key=itemgetter(columns_sorted.index("All CPU Hours")))
+        rows.sort(reverse=True, key=itemgetter(columns_sorted.index(self.sort_col)))
 
         # Prepend the header row
         rows.insert(0, tuple(columns_sorted))
