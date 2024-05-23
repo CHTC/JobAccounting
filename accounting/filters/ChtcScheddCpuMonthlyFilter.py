@@ -369,12 +369,12 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
             row["Output Files / Job"] = ""
 
         if data["TotalFiles"] > 0:
-            row["% OSDF Files"] = data["OSDFFilesXferd"] / data["TotalFiles"]
+            row["% OSDF Files"] = 100 *data["OSDFFilesXferd"] / data["TotalFiles"]
         else:
             row["% OSDF Files"] = 0
 
         if data["TotalFilesBytes"] > 0:
-            row["% OSDF Bytes"] = data["OSDFBytesXferd"] / data["TotalFilesBytes"]
+            row["% OSDF Bytes"] = 100 * data["OSDFBytesXferd"] / data["TotalFilesBytes"]
         else:
             row["% OSDF Bytes"] = 0
 
