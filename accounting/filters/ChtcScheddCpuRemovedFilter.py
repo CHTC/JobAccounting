@@ -45,7 +45,7 @@ DEFAULT_FILTER_ATTRS = [
     "MemoryUsage",
     "NumJobStarts",
     "NumShadowStarts",
-    "NumHolds",
+    "numholds",
     "JobUniverse",
     "JobStatus",
     "EnteredCurrentStatus",
@@ -157,7 +157,7 @@ class ChtcScheddCpuRemovedFilter(BaseFilter):
 
         # Add custom attrs to the list of attrs
         filter_attrs = DEFAULT_FILTER_ATTRS.copy()
-        filter_attrs = filter_attrs + ["ScheddName"]
+        filter_attrs = filter_attrs + ["ScheddName", "ProjectName"]
 
         # Count number of DAGNode Jobs
         if i.get("DAGNodeName") is not None and i.get("JobUniverse")!=12:
@@ -194,7 +194,7 @@ class ChtcScheddCpuRemovedFilter(BaseFilter):
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
             # Use UNKNOWN for missing or blank ProjectName and ScheddName
-            if attr in ["ScheddName"]:
+            if attr in ["ScheddName", "ProjectName"]:
                 o[attr].append(i.get(attr, "UNKNOWN") or "UNKNOWN")
             else:
                 o[attr].append(i.get(attr, None))
@@ -210,11 +210,6 @@ class ChtcScheddCpuRemovedFilter(BaseFilter):
 
         # Filter out jobs that were not removed
         if i.get("JobStatus",4) != 3:
-            return
-
-        # Filter out jobs that did not run in the OS pool
-        schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
-        if i.get("LastRemotePool", self.schedd_collector_host(schedd)) != self.collector_host:
             return
 
         # Add custom attrs to the list of attrs
@@ -262,6 +257,7 @@ class ChtcScheddCpuRemovedFilter(BaseFilter):
         filters = [
             self.schedd_filter,
             self.user_filter,
+            self.project_filter,
         ]
         return filters
 
@@ -269,6 +265,7 @@ class ChtcScheddCpuRemovedFilter(BaseFilter):
         # Add Project and Schedd columns to the Users table
         columns = DEFAULT_COLUMNS.copy()
         if agg == "Users":
+            columns[5] = "Most Used Project"
             columns[175] = "Most Used Schedd"
         if agg == "Projects":
             columns[5] = "Num Users"
@@ -349,8 +346,8 @@ class ChtcScheddCpuRemovedFilter(BaseFilter):
         row["Good CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
         row["Rm'd Jobs w/o Shadw Start"]= sum([starts in [0, None] for starts in data["NumShadowStarts"]])
-        row["Num Job Holds"]    = sum(self.clean(data["NumHolds"]))
-        row["Num Jobs w/1+ Holds"] = sum([holds > 0 for holds in self.clean(data["NumHolds"])])
+        row["Num Job Holds"]    = sum([int(numholds) for numholds in self.clean(data["numholds"])])
+        row["Num Jobs w/1+ Holds"] = sum([holds > 0 for holds in [int(numholds) for numholds in self.clean(data["numholds"])]])
         row["Avg MB Sent"]      = stats.mean(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
         row["Max MB Sent"]      = max(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
         row["Avg MB Recv"]      = stats.mean(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
@@ -390,6 +387,12 @@ class ChtcScheddCpuRemovedFilter(BaseFilter):
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
+            projects = self.clean(data["ProjectName"])
+            if len(projects) > 0:
+                row["Most Used Project"] = max(set(projects), key=projects.count)
+            else:
+                row["Most Used Project"] = "UNKNOWN"
+
             schedds = self.clean(data["ScheddName"])
             if len(schedds) > 0:
                 row["Most Used Schedd"] = max(set(schedds), key=schedds.count)
