@@ -33,8 +33,8 @@ DEFAULT_COLUMNS = {
     105: "Mean Setup Secs",
 
     110: "Min Hrs",
+    140: "Mean Hrs",
     150: "Max Hrs",
-    160: "Mean Hrs",
 
     180: "Input Files / Exec Att",
 #    181: "Input MB / Exec Att",
@@ -126,8 +126,8 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         is_long = False
         is_ckptable = False
         goodput_time = 0
-        osdf_files_count = 0
-        osdf_bytes_total = 0
+        osdf_files = 0
+        osdf_bytes = 0
         if has_shadow and not is_removed:
             goodput_time = int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 0))))
             if goodput_time > 0 and goodput_time < 60:
@@ -142,9 +142,11 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         elif not is_removed:
             goodput_time = int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 0))))
         input_files = 0
-        input_files_bytes = 0
+        input_bytes = 0
         output_files = 0
-        output_files_bytes = 0
+        output_bytes = 0
+        got_cedar_input_bytes = False
+        got_cedar_output_bytes = False
         if has_shadow and not is_site:
             is_ckptable = ((
                     i.get("WhenToTransferOutput", "").upper() == "ON_EXIT_OR_EVICT" and
@@ -171,22 +173,29 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
 
             for key, value in input_file_stats.items():
                 if key.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
-                    osdf_files_count += value
+                    osdf_files += value
                 if key.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
-                    osdf_bytes_total += value
+                    osdf_bytes += value
                 if key.casefold().endswith("FilesCountTotal".casefold()):
                     input_files += value
                 elif key.casefold().endswith("SizeBytesTotal".casefold()):
-                    input_files_bytes += value
+                    input_bytes += value
+                    if key.casefold() == "CedarSizeBytesTotal".casefold():
+                        got_cedar_input_bytes = True
             for key, value in output_file_stats.items():
                 if key.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
-                    osdf_files_count += value
+                    osdf_files += value
                 if key.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
-                    osdf_bytes_total += value
+                    osdf_bytes += value
                 if key.casefold().endswith("FilesCountTotal".casefold()):
                     output_files += value
                 elif key.casefold().endswith("SizeBytesTotal".casefold()):
-                    output_files_bytes += value
+                    output_bytes += value
+                    if key.casefold() == "CedarSizeBytesTotal".casefold():
+                        got_cedar_output_bytes = True
+            if not (got_cedar_input_bytes or got_cedar_output_bytes):
+                input_bytes += i.get("BytesRecvd", 0)
+                output_bytes += i.get("BytesSent", 0)
         long_job_wallclock_time = int(is_long) * i.get("LastRemoteWallClockTime", i.get("CommittedTime", 60))
 
         sum_cols = {}
@@ -201,8 +210,6 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["LongJobs"] = int(is_long)
         sum_cols["ShadowJobs"] = int(has_shadow)
         sum_cols["Checkpointable"] = int(is_ckptable)
-        sum_cols["OSDFFilesXferd"] = int(osdf_files_count)
-        sum_cols["OSDFBytesXferd"] = int(osdf_bytes_total)
         sum_cols["JobsOverRqstDisk"] = int(is_over_rqst_disk)
         sum_cols["SingularityJobs"] = int(is_singularity_job)
         sum_cols["ActivationDurationJobs"] = int(has_activation_duration)
@@ -220,13 +227,17 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["HeldJobs"] = int(has_holds)
         sum_cols["NumJobHolds"] = i.get("NumHolds", 0)
 
-        sum_cols["InputFiles"] = input_files
-        sum_cols["OutputFiles"] = output_files
-        sum_cols["TotalFiles"] = input_files + output_files
-
-        sum_cols["InputFilesBytes"] = input_files_bytes
-        sum_cols["OutputFilesBytes"] = output_files_bytes
-        sum_cols["TotalFilesBytes"] = input_files_bytes + output_files_bytes
+        if input_files > 0:
+            sum_cols["InputFiles"] = input_files
+            sum_cols["InputBytes"] = input_bytes
+        if output_files > 0:
+            sum_cols["OutputFiles"] = output_files
+            sum_cols["OutputBytes"] = output_bytes
+        if input_files > 0 or output_files > 0:
+            sum_cols["TotalFiles"] = input_files + output_files
+            sum_cols["TotalBytes"] = input_bytes + output_bytes
+            sum_cols["OSDFFiles"] = osdf_files
+            sum_cols["OSDFBytes"] = osdf_bytes
 
         max_cols = {}
         max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
@@ -337,7 +348,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         row["Num Uniq Job Ids"]  = data["Jobs"]
         row["Good CPU Hours"]    = data["GoodCpuTime"] / 3600
 
-        row["OSDF Files Xferd"]  = data["OSDFFilesXferd"]
+        row["OSDF Files Xferd"] = data.get("OSDFFiles", "")
         row["Num DAG Node Jobs"] = data["DAGNodeJobs"]
         row["Num Rm'd Jobs"]     = data["RmJobs"]
         row["Num Jobs w/>1 Exec Att"] = data["MultiExecJobs"]
@@ -368,15 +379,11 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         else:
             row["Output Files / Job"] = ""
 
-        if data["TotalFiles"] > 0:
-            row["% OSDF Files"] = 100 *data["OSDFFilesXferd"] / data["TotalFiles"]
+        if data.get("OSDFFiles", 0) > 0 and data.get("TotalFiles", 0) > 0:
+            row["% OSDF Files"] = 100 * (data["OSDFFiles"] / data["TotalFiles"])
+            row["% OSDF Bytes"] = 100 * (data["OSDFBytes"] / data["TotalBytes"])
         else:
-            row["% OSDF Files"] = 0
-
-        if data["TotalFilesBytes"] > 0:
-            row["% OSDF Bytes"] = 100 * data["OSDFBytesXferd"] / data["TotalFilesBytes"]
-        else:
-            row["% OSDF Bytes"] = 0
+            row["% OSDF Files"] = row["% OSDF Bytes"] = ""
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
