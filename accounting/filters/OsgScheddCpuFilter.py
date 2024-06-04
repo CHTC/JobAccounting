@@ -840,6 +840,7 @@ class OsgScheddCpuFilter(BaseFilter):
 
         if osdf_files_count == 0 or osdf_bytes_total == 0:
             condor_versions_set = set(data["CondorVersion"])
+            condor_versions_set.discard(None)
             condor_versions_tuples_list = []
             for version in condor_versions_set:
                 condor_versions_tuples_list.append(tuple([int(x) for x in version.split()[1].split(".")]))

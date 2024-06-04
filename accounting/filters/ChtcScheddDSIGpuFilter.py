@@ -33,6 +33,12 @@ DEFAULT_FILTER_ATTRS = [
 class ChtcScheddDSIGpuFilter(BaseFilter):
     name = "DSI GPU schedd job history"
 
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.sort_col = "All GPU Hours"
+
+
     def get_query(self, index, start_ts, end_ts, **kwargs):
         # Returns dict matching Elasticsearch.search() kwargs
         # (Dict has same structure as the REST API query language)
