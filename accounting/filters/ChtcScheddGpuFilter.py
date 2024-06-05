@@ -1,23 +1,32 @@
 
 import statistics as stats
 from pathlib import Path
+from ast import literal_eval
 from .BaseFilter import BaseFilter
 
 
 DEFAULT_COLUMNS = {
-    10: "All CPU Hours",
-    15: "All GPU Hours",
-    20: "Num Uniq Job Ids",
+    10: "Num Uniq Job Ids",
+    20: "All CPU Hours",
+    25: "All GPU Hours",
     30: "% Good CPU Hours",
     35: "% Good GPU Hours",
 
     45: "% Ckpt Able",
     50: "% Rm'd Jobs",
+    51: "Total Files Xferd",
+    52: "OSDF Files Xferd",
+    53: "% OSDF Files",
+    54: "% OSDF Bytes",
+    55: "Shadw Starts / Job Id",
+    56: "Exec Atts / Shadw Start",
+    57: "Holds / Job Id",
+
     60: "% Short Jobs",
     70: "% Jobs w/>1 Exec Att",
-
-    80: "Shadw Starts / Job Id",
-    90: "Exec Atts / Shadw Start",
+    80: "% Jobs w/1+ Holds",
+    81: "% Jobs Over Rqst Disk",
+    82: "% Jobs using S'ty",
 
     110: "Min Hrs",
     120: "25% Hrs",
@@ -28,16 +37,12 @@ DEFAULT_COLUMNS = {
     160: "Mean Hrs",
     170: "Std Hrs",
 
-    180: "Avg MB Sent",
-    181: "Max MB Sent",
-    190: "Avg MB Recv",
-    191: "Max MB Recv",
-
-    200: "Max Rqst Mem MB",
-    210: "Med Used Mem MB",
-    220: "Max Used Mem MB",
-    230: "Max Rqst Cpus",
-    240: "Max Rqst Gpus",
+    180: "Input Files / Exec Att",
+#    181: "Input MB / Exec Att",
+#    182: "Input MB / File",
+    190: "Output Files / Job",
+#    191: "Output MB / Job",
+#    192: "Output MB / File",
 
     300: "Good CPU Hours",
     303: "Good GPU Hours",
@@ -50,6 +55,14 @@ DEFAULT_COLUMNS = {
     350: "Num Jobs w/>1 Exec Att",
     360: "Num Short Jobs",
     390: "Num Ckpt Able Jobs",
+
+    500: "Max Rqst Mem MB",
+    510: "Med Used Mem MB",
+    520: "Max Used Mem MB",
+    525: "Max Rqst Disk GB",
+    527: "Max Used Disk GB",
+    530: "Max Rqst Cpus",
+    540: "Max Rqst Gpus",
 }
 
 
@@ -59,16 +72,31 @@ DEFAULT_FILTER_ATTRS = [
     "RequestCpus",
     "RequestGpus",
     "RequestMemory",
+    "RequestDisk",
     "RecordTime",
+    "JobStartDate",
     "JobCurrentStartDate",
     "MemoryUsage",
+    "DiskUsage",
     "NumJobStarts",
     "NumShadowStarts",
+    "NumHolds",
     "JobUniverse",
     "JobStatus",
     "EnteredCurrentStatus",
     "BytesSent",
     "BytesRecvd",
+    "TransferInputStats",
+    "TransferOutputStats",
+    "SingularityImage",
+    "ActivationDuration",
+    "ActivationSetupDuration",
+    "CondorVersion",
+    "lastremotewallclocktime",
+    "transferinputstats",
+    "transferoutputstats",
+    "activationduration",
+    "activationsetupduration",
 ]
 
 
@@ -338,8 +366,8 @@ class ChtcScheddGpuFilter(BaseFilter):
             columns[5] = "Num Users"
         if agg == "Site":
             columns[5] = "Num Users"
-            rm_columns = [30,35,45,50,70,80,90,180,181,190,191,300,303,305,307,310,320,330,340,350,390]
-            [columns.pop(key) for key in rm_columns]
+            rm_columns = [30,35,45,50,51,52,53,54,55,56,57,70,80,180,181,190,191,300,303,305,307,310,320,330,340,350,390]
+            [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
     def merge_filtered_data(self, data, agg):
@@ -436,6 +464,121 @@ class ChtcScheddGpuFilter(BaseFilter):
         long_times_sorted = self.clean(long_times_sorted)
         long_times_sorted.sort()
 
+        # File transfer stats
+        input_files_total_count = []
+        input_files_total_bytes = []
+        input_files_total_job_starts = []
+        output_files_total_count = []
+        output_files_total_bytes = []
+        output_files_total_job_stops = []
+        osdf_files_count = 0
+        osdf_bytes_total = 0
+        for (
+                job_status,
+                job_universe,
+                job_starts,
+                input_stats,
+                input_cedar_bytes,
+                output_stats,
+                output_cedar_bytes,
+            ) in zip(
+                data["JobStatus"],
+                data["JobUniverse"],
+                data["NumJobStarts"],
+                data["transferinputstats"],
+                data["BytesRecvd"],
+                data["transferoutputstats"],
+                data["BytesSent"],
+            ):
+
+            if job_universe in {7, 12}:
+                input_files_total_count.append(None)
+                input_files_total_job_starts.append(None)
+                output_files_total_count.append(None)
+                output_files_total_job_stops.append(None)
+                continue
+
+            input_files_count = 0
+            input_files_bytes = 0
+            if input_stats is None:
+                input_files_total_count.append(None)
+                input_files_total_job_starts.append(None)
+            else:
+                try:
+                    if input_stats.endswith("..."):
+                        input_stats = f"{input_stats[:input_stats.rindex(',')]}}}"
+                    input_stats = literal_eval(input_stats)
+                except SyntaxError:
+                    input_files_total_count.append(None)
+                    input_files_total_job_starts.append(None)
+                    continue
+                got_cedar_bytes = False
+                for attr in input_stats:
+                    if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
+                        osdf_files_count += input_stats[attr]
+                    if attr.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
+                        osdf_bytes_total += input_stats[attr]
+                    if attr.casefold().endswith("FilesCountTotal".casefold()):
+                        input_files_count += input_stats[attr]
+                    elif attr.casefold().endswith("SizeBytesTotal".casefold()):
+                        input_files_bytes += input_stats[attr]
+                        if attr.casefold() == "CedarSizeBytesTotal".casefold():
+                            got_cedar_bytes = True
+                if not got_cedar_bytes:
+                    input_files_bytes += input_cedar_bytes
+                input_files_total_count.append(input_files_count)
+                input_files_total_bytes.append(input_files_bytes)
+                input_files_total_job_starts.append(job_starts)
+
+            output_files_count = 0
+            output_files_bytes = 0
+            if output_stats is None:
+                output_files_total_count.append(None)
+                output_files_total_job_stops.append(None)
+            else:
+                try:
+                    if output_stats.endswith("..."):
+                        output_stats = f"{output_stats[:output_stats.rindex(',')]}}}"
+                    output_stats = literal_eval(output_stats)
+                except SyntaxError:
+                    output_files_total_count.append(None)
+                    output_files_total_job_stops.append(None)
+                    continue
+                got_cedar_bytes = False
+                for attr in output_stats:
+                    if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
+                        osdf_files_count += output_stats[attr]
+                    if attr.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
+                        osdf_bytes_total += output_stats[attr]
+                    if attr.casefold().endswith("FilesCountTotal".casefold()):
+                        output_files_count += output_stats[attr]
+                    elif attr.casefold().endswith("SizeBytesTotal".casefold()):
+                        output_files_bytes += output_stats[attr]
+                        if attr.casefold() == "CedarSizeBytesTotal".casefold():
+                            got_cedar_bytes = True
+                if not got_cedar_bytes:
+                    output_files_bytes += output_cedar_bytes
+                output_files_total_count.append(output_files_count)
+                output_files_total_bytes.append(output_files_bytes)
+                output_files_total_job_stops.append(1)
+
+        activation_durations = []
+        setup_durations = []
+        act_cutoff_date = 1_642_053_600  # 2022-01-13 HTCondor 9.5.0
+        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
+                data["JobStartDate"],
+                data["JobCurrentStartDate"],
+                data["ActivationDuration"],
+                data["ActivationSetupDuration"]):
+            start_date = current_start_date or start_date
+            if None in [start_date, activation_duration, setup_duration]:
+                continue
+            if ((start_date > act_cutoff_date) and
+                (activation_duration < (act_cutoff_date - 24*3600) and
+                (setup_duration < (act_cutoff_date - 24*3600)))):
+                activation_durations.append(activation_duration)
+                setup_durations.append(setup_duration)
+
         # Compute columns
         row["All CPU Hours"]    = sum(self.clean(total_cpu_time)) / 3600
         row["All GPU Hours"]    = sum(self.clean(total_gpu_time)) / 3600
@@ -444,20 +587,25 @@ class ChtcScheddGpuFilter(BaseFilter):
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
         row["Num DAG Node Jobs"] = sum(data['_NumDAGNodes'])
         row["Num Rm'd Jobs"]    = sum([status == 3 for status in data["JobStatus"]])
+        row["Num Job Holds"]    = sum(self.clean(data["NumHolds"]))
+        row["Num Jobs w/1+ Holds"] = sum([holds > 0 for holds in self.clean(data["NumHolds"])])
+        row["Num Jobs Over Rqst Disk"] = sum([(usage or 0) > (request or 1)
+            for (usage, request) in zip(data["DiskUsage"], data["RequestDisk"])])
         row["Num Jobs w/>1 Exec Att"] = sum([starts > 1 for starts in self.clean(data["NumJobStarts"])])
-        row["Avg MB Sent"]      = stats.mean(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Max MB Sent"]      = max(self.clean(data["BytesSent"], allow_empty_list=False)) / 1e6
-        row["Avg MB Recv"]      = stats.mean(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
-        row["Max MB Recv"]      = max(self.clean(data["BytesRecvd"], allow_empty_list=False)) / 1e6
         row["Num Short Jobs"]   = sum(self.clean(is_short_job))
         row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
         row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
         row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
+        row["Max Rqst Disk GB"] = max(self.clean(data["RequestDisk"], allow_empty_list=False)) / (1000*1000)
+        row["Max Used Disk GB"] = max(self.clean(data["DiskUsage"], allow_empty_list=False)) / (1000*1000)
         row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
         row["Max Rqst Gpus"]    = max(self.clean(data["RequestGpus"], allow_empty_list=False))
         row["Num Exec Atts"]    = sum(self.clean(num_exec_attempts))
         row["Num Shadw Starts"] = sum(self.clean(num_shadow_starts))
-        row["Num Ckpt Able Jobs"] = sum(data["_NumCkptJobs"])
+        row["Num Local Univ Jobs"] = sum(data["_NumLocalUnivJobs"])
+        row["Num Sched Univ Jobs"] = sum(data["_NumSchedulerUnivJobs"])
+        row["Num Ckpt Able Jobs"]  = sum(data["_NumCkptJobs"])
+        row["Num S'ty Jobs"]       = len(self.clean(data["SingularityImage"]))
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
@@ -469,16 +617,24 @@ class ChtcScheddGpuFilter(BaseFilter):
         else:
             row["% Good GPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
-            row["% Ckpt Able"] = 100 * row["Num Ckpt Able Jobs"] / row["Num Uniq Job Ids"]
             row["Shadw Starts / Job Id"] = row["Num Shadw Starts"] / row["Num Uniq Job Ids"]
+            row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
             row["% Jobs w/>1 Exec Att"] = 100 * row["Num Jobs w/>1 Exec Att"] / row["Num Uniq Job Ids"]
+            row["% Jobs w/1+ Holds"] = 100 * row["Num Jobs w/1+ Holds"] / row["Num Uniq Job Ids"]
+            row["% Jobs Over Rqst Disk"] = 100 * row["Num Jobs Over Rqst Disk"] / row["Num Uniq Job Ids"]
+            row["% Ckpt Able"] = 100 * row["Num Ckpt Able Jobs"] / row["Num Uniq Job Ids"]
+            row["% Jobs using S'ty"] = 100 * row["Num S'ty Jobs"] / row["Num Uniq Job Ids"]
         else:
             row["Shadw Starts / Job Id"] = 0
+            row["Holds / Job Id"] = 0
             row["% Rm'd Jobs"] = 0
             row["% Short Jobs"] = 0
             row["% Jobs w/>1 Exec Att"] = 0
+            row["% Jobs w/1+ Holds"] = 0
+            row["% Jobs Over Rqst Disk"] = 0
+            row["% Jobs using S'ty"] = 0
         if row["Num Shadw Starts"] > 0:
             row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
         else:
@@ -489,6 +645,67 @@ class ChtcScheddGpuFilter(BaseFilter):
         else:
             row["CPU Hours / Bad Exec Att"] = 0
             row["GPU Hours / Bad Exec Att"] = 0
+
+        # File transfer stats
+        total_files = 0
+        total_bytes = 0
+        row["Total Files Xferd"] = 0
+        if any(input_files_total_job_starts):
+            exec_atts = sum(self.clean(input_files_total_job_starts))
+            input_files = sum(self.clean(input_files_total_count))
+            input_mb = sum(self.clean(input_files_total_bytes)) / 1e6
+
+            total_files += input_files
+            total_bytes += input_mb * 1e6
+
+            row["Total Input Files"] = input_files
+            if exec_atts > 0:
+                row["Input Files / Exec Att"] = input_files / exec_atts
+                row["Input MB / Exec Att"] = input_mb / exec_atts
+            if input_files > 0:
+                row["Input MB / File"] = input_mb / input_files
+                row["Total Files Xferd"] = row.get("Total Files Xferd", 0) + input_files
+
+        if any(output_files_total_job_stops):
+            exec_ends = sum(self.clean(output_files_total_job_stops))
+            output_files = sum(self.clean(output_files_total_count))
+            output_mb = sum(self.clean(output_files_total_bytes)) / 1e6
+
+            total_files += output_files
+            total_bytes += output_mb * 1e6
+
+            row["Total Ouptut Files"] = output_files
+            if exec_ends > 0:
+                row["Output Files / Job"] = output_files / exec_ends
+                row["Output MB / Job"] = output_mb / exec_ends
+            if output_files > 0:
+                row["Output MB / File"] = output_mb / output_files
+                row["Total Files Xferd"] = row.get("Total Files Xferd", 0) + output_files
+
+        if osdf_files_count == 0 or osdf_bytes_total == 0:
+            row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0                    
+        else:
+            row["OSDF Files Xferd"] = osdf_files_count or ""
+            if osdf_files_count > 0 and osdf_bytes_total > 0 and total_files > 0 and total_bytes > 0:
+                row["% OSDF Files"] = 100 * osdf_files_count / total_files
+                row["% OSDF Bytes"] = 100 * osdf_bytes_total / total_bytes
+            else:
+                row["% OSDF Files"] = row["% OSDF Bytes"] = ""
+
+        # Insert missing value if any missing
+        for key in ["Total Files Xferd", "Total Input Files", "Total Output Files",
+                    "Input Files / Exec Att", "Output Files / Job",
+                    "Input MB / Exec Att", "Output MB / Job",
+                    "Input MB / File", "Output MB / File"]:
+            row[key] = row.get(key, -999)
+
+        # Compute activation time stats
+        row["Mean Actv Hrs"] = ""
+        row["Mean Setup Secs"] = ""
+        if len(activation_durations) > 0:
+            row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
+        if len(setup_durations) > 0:
+            row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
 
         # Compute time percentiles and stats
         if len(long_times_sorted) > 0:
@@ -574,22 +791,58 @@ class ChtcScheddGpuFilter(BaseFilter):
         long_times_sorted = self.clean(long_times_sorted)
         long_times_sorted.sort()
 
+        # Activation metrics added in 9.4.1
+        # Added to the OSG Connect access points at 1640100600
+        activation_durations = []
+        setup_durations = []
+        act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
+        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
+                data["JobStartDate"],
+                data["JobCurrentStartDate"],
+                data["ActivationDuration"],
+                data["ActivationSetupDuration"]):
+            start_date = current_start_date or start_date
+            if None in [start_date, activation_duration, setup_duration]:
+                continue
+            if ((start_date > act_cutoff_date) and
+                (activation_duration < (act_cutoff_date - 24*3600) and
+                (setup_duration < (act_cutoff_date - 24*3600)))):
+                activation_durations.append(activation_duration)
+                setup_durations.append(setup_duration)
+
         # Compute columns
         row["All CPU Hours"]    = sum(self.clean(goodput_cpu_time)) / 3600
         row["All GPU Hours"]    = sum(self.clean(goodput_gpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
+        row["Num Jobs Over Rqst Disk"] = sum([(usage or 0) > (request or 1)
+            for (usage, request) in zip(data["DiskUsage"], data["RequestDisk"])])
         row["Num Short Jobs"]   = sum(self.clean(is_short_job))
         row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
         row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
         row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
+        row["Max Rqst Disk GB"] = max(self.clean(data["RequestDisk"], allow_empty_list=False)) / (1000*1000)
+        row["Max Used Disk GB"] = max(self.clean(data["DiskUsage"], allow_empty_list=False)) / (1000*1000)
         row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
         row["Max Rqst Gpus"]    = max(self.clean(data["RequestGpus"], allow_empty_list=False))
         row["Num Users"]        = len(set(data["User"]))
+        row["Num S'ty Jobs"]    = len(self.clean(data["SingularityImage"]))
 
         if row["Num Uniq Job Ids"] > 0:
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
+            row["% Jobs Over Rqst Disk"] = 100 * row["Num Jobs Over Rqst Disk"] / row["Num Uniq Job Ids"]
+            row["% Jobs using S'ty"] = 100 * row["Num S'ty Jobs"] / row["Num Uniq Job Ids"]
         else:
             row["% Short Jobs"] = 0
+            row["% Jobs Over Rqst Disk"] = 0
+            row["% Jobs using S'ty"] = 0
+
+        # Compute activation time stats
+        row["Mean Actv Hrs"] = ""
+        row["Mean Setup Secs"] = ""
+        if len(activation_durations) > 0:
+            row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
+        if len(setup_durations) > 0:
+            row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
 
         # Compute time percentiles and stats
         if len(long_times_sorted) > 0:
