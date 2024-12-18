@@ -371,9 +371,10 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             institution = "Unknown (resource name missing)"
         elif "MachineAttrOSG_INSTITUTION_ID0" in i:
             osg_id_short = (i.get("MachineAttrOSG_INSTITUTION_ID0") or "").split("_")[-1]
-            institution = PRP_ID_MAP.get(osg_id_short, SITE_MAP.get(site, f"Unmapped resource: {site}"))
+            institution = PRP_ID_MAP.get(osg_id_short, SITE_MAP.get(site, {}).get("Name", f"Unmapped resource: {site}"))
         else:
-            institution = SITE_MAP.get(site, f"Unmapped resource: {site}")
+            institution = PRP_ID_MAP.get(SITE_MAP.get(site, {}).get("InstitutionID", None),
+                                         f"Unmapped resource: {site}")
         output = data["Institution"][institution]
         total = data["Institution"]["TOTAL"]
 

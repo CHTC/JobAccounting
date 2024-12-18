@@ -398,9 +398,10 @@ class OsgScheddGpuFilter(BaseFilter):
             institution = "Unknown (resource name missing)"
         elif "MachineAttrOSG_INSTITUTION_ID0" in i:
             osg_id_short = (i.get("MachineAttrOSG_INSTITUTION_ID0") or "").split("_")[-1]
-            institution = PRP_ID_MAP.get(osg_id_short, SITE_MAP.get(site, f"Unmapped resource: {site}"))
+            institution = PRP_ID_MAP.get(osg_id_short, SITE_MAP.get(site, {}).get("Name", f"Unmapped resource: {site}"))
         else:
-            institution = SITE_MAP.get(site, f"Unmapped resource: {site}")
+            institution = PRP_ID_MAP.get(SITE_MAP.get(site, {}).get("InstitutionID", None),
+                                         f"Unmapped resource: {site}")
         o = data["Institution"][institution]
         o["_Sites"].append(site)
 
@@ -878,7 +879,7 @@ class OsgScheddGpuFilter(BaseFilter):
             if all(condor_version_tuple < (9, 7, 0) for condor_version_tuple in condor_versions_tuples_list):
                 row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = "-"
             else:
-                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0                    
+                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0
         else:
             row["OSDF Files Xferd"] = osdf_files_count or ""
             if osdf_files_count > 0 and osdf_bytes_total > 0 and total_files > 0 and total_bytes > 0:

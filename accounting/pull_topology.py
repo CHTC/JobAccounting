@@ -29,26 +29,31 @@ def get_latest_site_map():
     xmltree = ET.parse(urlopen(RESOURCE_SUMMARY_URL))
     xmlroot = xmltree.getroot()
 
-    site_map = MANUAL_MAPPINGS.copy()
+    site_map = {k: {"Name": v} for k,v in MANUAL_MAPPINGS.copy().items()}
 
     for resource_group in xmlroot:
-        facility_name = resource_group.find("Facility").find("Name").text
+
+        facility = {
+            "Name": resource_group.find("Facility").find("Name").text,
+            "InstitutionID": resource_group.find("Facility").find("InstitutionID").text
+        }
+
         # Facility names should map to themsleves
-        site_map[facility_name] = facility_name
+        site_map[facility['Name']] = facility
 
         # Site names should map to the facility
         site_name = resource_group.find("Site").find("Name").text
-        site_map[site_name] = facility_name
+        site_map[site_name] = facility
 
         # Group names should map to the facility
         group_name = resource_group.find("GroupName").text
-        site_map[group_name] = facility_name
+        site_map[group_name] = facility
 
         # All resources should map to the facility
         resources = resource_group.find("Resources")
         for resource in resources:
             resource_name = resource.find("Name").text
-            site_map[resource_name] = facility_name
+            site_map[resource_name] = facility
 
     return site_map
 
