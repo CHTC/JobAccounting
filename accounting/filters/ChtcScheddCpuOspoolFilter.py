@@ -108,7 +108,7 @@ DEFAULT_FILTER_ATTRS = [
 
 
 class ChtcScheddCpuOspoolFilter(BaseFilter):
-    name = "CHTC schedd job history"
+    name = "CHTC schedd OSPool usage job history"
 
     def __init__(self, **kwargs):
         self.collector_hosts = {"cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"}
