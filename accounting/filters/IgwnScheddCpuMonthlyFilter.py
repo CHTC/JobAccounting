@@ -120,7 +120,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         is_over_disk_request = i.get("DiskUsage", 0) > i.get("RequestDisk", 1)
         goodput_time = 0
         if not is_removed:
-            goodput_time = i.get("LastRemoteWallClockTime", i.get("CommittedTime", 0))
+            goodput_time = int(float(i.get("lastremotewallclockTime", i.get("CommittedTime", 0))))
             if goodput_time > 0 and goodput_time < 60:
                 is_short = True
             elif None in [i.get("RecordTime"), i.get("JobCurrentStartDate")]:
@@ -131,7 +131,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
             else:
                 is_long = True
         elif not is_removed:
-            goodput_time = i.get("LastRemoteWallClockTime", i.get("CommittedTime", 0))
+            goodput_time = int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 0))))
         input_files = output_files = 0
         input_bytes = output_bytes = 0
         osdf_files = osdf_bytes = 0
@@ -171,7 +171,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
             memory_gb=i.get("RequestMemory", 1024)/1024,
             disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
         )
-        long_job_wallclock_time = int(is_long) * i.get("LastRemoteWallClockTime", i.get("CommittedTime", 60))
+        long_job_wallclock_time = int(is_long) * int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 60))))
 
         sum_cols = {}
         sum_cols["Jobs"] = 1
