@@ -255,7 +255,6 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
 
         counter_cols = {}
         counter_cols["ScheddNames"] = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
-        counter_cols["ProjectNames"] = i.get("ProjectName", i.get("projectname", "UNKNOWN")) or "UNKNOWN"
 
         for col in counter_cols:
             if not col in output:
