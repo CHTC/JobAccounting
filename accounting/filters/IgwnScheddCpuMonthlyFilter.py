@@ -369,26 +369,11 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
-            projects = data["ProjectNames"]
-            if len(projects) > 0:
-                row["Most Used Project"] = max(projects.items(), key=itemgetter(1))[0]
-            else:
-                row["Most Used Project"] = "UNKNOWN"
-
             schedds = data["ScheddNames"]
             if len(schedds) > 0:
                 row["Most Used Schedd"] = max(schedds.items(), key=itemgetter(1))[0]
             else:
                 row["Most Used Schedd"] = "UNKNOWN"
-        if agg == "Projects":
-            row["Num Users"] = len(data["Users"])
-            row["Num Site Instns"] = len(data["Institutions"])
-            row["Num Sites"] = len(data["Sites"])
-            if agg_name != "TOTAL":
-                project_map = self.topology_project_map.get(agg_name.lower(), self.topology_project_map["UNKNOWN"])
-                row["PI Institution"] = project_map["institution"]
-            else:
-                row["PI Institution"] = ""
 
         return row
 
