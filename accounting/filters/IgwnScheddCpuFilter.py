@@ -408,7 +408,7 @@ class IgwnScheddCpuFilter(BaseFilter):
                         input_files_bytes += input_stats[attr]
                         if attr.casefold() == "CedarSizeBytesTotal".casefold():
                             got_cedar_bytes = True
-                if not got_cedar_bytes:
+                if not got_cedar_bytes and input_cedar_bytes is not None:
                     input_files_bytes += input_cedar_bytes
                 input_files_total_count.append(input_files_count)
                 input_files_total_bytes.append(input_files_bytes)
@@ -432,7 +432,7 @@ class IgwnScheddCpuFilter(BaseFilter):
                         output_files_bytes += output_stats[attr]
                         if attr.casefold() == "CedarSizeBytesTotal".casefold():
                             got_cedar_bytes = True
-                if not got_cedar_bytes:
+                if not got_cedar_bytes and output_cedar_bytes is not None:
                     output_files_bytes += output_cedar_bytes
                 output_files_total_count.append(output_files_count)
                 output_files_total_bytes.append(output_files_bytes)
