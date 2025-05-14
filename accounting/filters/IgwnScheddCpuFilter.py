@@ -96,8 +96,8 @@ DEFAULT_FILTER_ATTRS = [
     "ActivationSetupDuration",
     "CondorVersion",
     "lastremotewallclocktime",
-    "transferinputstats",
-    "transferoutputstats",
+    "TransferInputStats",
+    "TransferOutputStats",
     "activationduration",
     "activationsetupduration",
 ]
@@ -217,7 +217,7 @@ class IgwnScheddCpuFilter(BaseFilter):
 
         # Add custom attrs to the list of attrs
         filter_attrs = DEFAULT_FILTER_ATTRS.copy()
-        filter_attrs = filter_attrs + ["ScheddName", "ProjectName"]
+        filter_attrs = filter_attrs + ["ScheddName"]
 
         # Count number of DAGNode Jobs
         if i.get("DAGNodeName") is not None:
@@ -265,7 +265,7 @@ class IgwnScheddCpuFilter(BaseFilter):
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
             # Use UNKNOWN for missing or blank ScheddName
-            if attr in {"ScheddName", "ProjectName"}:
+            if attr in {"ScheddName"}:
                 o[attr].append(i.get(attr, i.get(attr.lower(), "UNKNOWN")) or "UNKNOWN")
             elif attr in {"lastremotewallclocktime", "activationduration", "activationsetupduration"}:
                 try:
@@ -274,74 +274,6 @@ class IgwnScheddCpuFilter(BaseFilter):
                     o[attr].append(None)
             else:
                 o[attr].append(i.get(attr, None))
-
-
-    def project_filter(self, data, doc):
-
-        # Get input dict
-        i = doc["_source"]
-
-        # Get output dict for this project
-        project = i.get("ProjectName", i.get("projectname", "UNKNOWN")) or "UNKNOWN"
-        o = data["Projects"][project]
-
-        # Add custom attrs to the list of attrs
-        filter_attrs = DEFAULT_FILTER_ATTRS.copy()
-        filter_attrs = filter_attrs + ["User"]
-
-        # Count number of DAGNode Jobs
-        if i.get("DAGNodeName") is not None:
-            o["_NumDAGNodes"].append(1)
-        else:
-            o["_NumDAGNodes"].append(0)
-
-        # Count number of history ads (i.e. number of unique job ids)
-        o["_NumJobs"].append(1)
-
-        # Count number of checkpointable jobs
-        if  (
-                i.get("WhenToTransferOutput", "").upper() == "ON_EXIT_OR_EVICT" and
-                i.get("Is_resumable", False)
-            ) or (
-                i.get("SuccessCheckpointExitBySignal", False) or
-                i.get("SuccessCheckpointExitCode") is not None
-            ):
-            o["_NumCkptJobs"].append(1)
-        else:
-            o["_NumCkptJobs"].append(0)
-
-        # Compute badput fields
-        if (
-                i.get("NumJobStarts", 0) > 1 and
-                i.get("RemoteWallClockTime", 0) > 0 and
-                i.get("RemoteWallClockTime") != i.get("CommittedTime", 0)
-            ):
-            o["_BadWallClockTime"].append(i["RemoteWallClockTime"] - int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 0)))))
-            o["_NumBadJobStarts"].append(i["NumJobStarts"] - 1)
-        else:
-            o["_BadWallClockTime"].append(0)
-            o["_NumBadJobStarts"].append(0)
-
-        # Compute job units
-        if i.get("RemoteWallClockTime", 0) > 0:
-            o["NumJobUnits"].append(get_job_units(
-                cpus=i.get("RequestCpus", 1),
-                memory_gb=i.get("RequestMemory", 1024)/1024,
-                disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
-            ))
-        else:
-            o["NumJobUnits"].append(None)
-
-        # Add attr values to the output dict, use None if missing
-        for attr in filter_attrs:
-            if attr in {"lastremotewallclocktime", "activationduration", "activationsetupduration"}:
-                try:
-                    o[attr].append(int(float(i.get(attr))))
-                except TypeError:
-                    o[attr].append(None)
-            else:
-                o[attr].append(i.get(attr, None))
-
 
     def get_filters(self):
         # Add all filter methods to a list
@@ -352,13 +284,10 @@ class IgwnScheddCpuFilter(BaseFilter):
         return filters
 
     def add_custom_columns(self, agg):
-        # Add Project and Schedd columns to the Users table
+        # Add Schedd columns to the Users table
         columns = DEFAULT_COLUMNS.copy()
         if agg == "Users":
-            #columns[5] = "Most Used Project"
             columns[175] = "Most Used Schedd"
-        if agg == "Projects":
-            columns[5] = "Num Users"
         return columns
 
     def merge_filtered_data(self, data, agg):
@@ -380,8 +309,7 @@ class IgwnScheddCpuFilter(BaseFilter):
                 data["_BadWallClockTime"],
                 data["RemoteWallClockTime"],
                 data["RequestCpus"]):
-            #goodput_time = last_wallclock_time or committed_time
-            goodput_time = committed_time
+            goodput_time = last_wallclock_time or committed_time
             if cpus is not None:
                 cpus = max(cpus, 1)  # assume at least 1 CPU even if 0 CPUs were stored in Elasticsearch
             if None in [goodput_time, cpus]:
@@ -413,8 +341,7 @@ class IgwnScheddCpuFilter(BaseFilter):
                 data["CommittedTime"],
                 data["RecordTime"],
                 data["JobCurrentStartDate"]):
-            #goodput_time = last_wallclock_time or committed_time
-            goodput_time = committed_time
+            goodput_time = last_wallclock_time or committed_time
             if (goodput_time is not None) and (goodput_time > 0):
                 is_short_job.append(goodput_time < 60)
             elif None in (record_date, start_date):
@@ -432,8 +359,7 @@ class IgwnScheddCpuFilter(BaseFilter):
                 data["lastremotewallclocktime"],
                 data["CommittedTime"],
                 data["JobStatus"]):
-            #goodput_time = last_wallclock_time or committed_time
-            goodput_time = committed_time
+            goodput_time = last_wallclock_time or committed_time
             if (is_short is False) and (job_status != 3):
                 long_times_sorted.append(goodput_time)
         long_times_sorted = self.clean(long_times_sorted)
@@ -458,9 +384,9 @@ class IgwnScheddCpuFilter(BaseFilter):
             ) in zip(
                 data["JobStatus"],
                 data["NumJobStarts"],
-                data["transferinputstats"],
+                data["TransferInputStats"],
                 data["BytesRecvd"],
-                data["transferoutputstats"],
+                data["TransferOutputStats"],
                 data["BytesSent"],
             ):
 
@@ -470,14 +396,6 @@ class IgwnScheddCpuFilter(BaseFilter):
                 input_files_total_count.append(None)
                 input_files_total_job_starts.append(None)
             else:
-                try:
-                    if input_stats.endswith("..."):
-                        input_stats = f"{input_stats[:input_stats.rindex(',')]}}}"
-                    input_stats = literal_eval(input_stats)
-                except SyntaxError:
-                    input_files_total_count.append(None)
-                    input_files_total_job_starts.append(None)
-                    continue
                 got_cedar_bytes = False
                 for attr in input_stats:
                     if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
@@ -490,7 +408,7 @@ class IgwnScheddCpuFilter(BaseFilter):
                         input_files_bytes += input_stats[attr]
                         if attr.casefold() == "CedarSizeBytesTotal".casefold():
                             got_cedar_bytes = True
-                if not got_cedar_bytes:
+                if not got_cedar_bytes and input_cedar_bytes is not None:
                     input_files_bytes += input_cedar_bytes
                 input_files_total_count.append(input_files_count)
                 input_files_total_bytes.append(input_files_bytes)
@@ -502,14 +420,6 @@ class IgwnScheddCpuFilter(BaseFilter):
                 output_files_total_count.append(None)
                 output_files_total_job_stops.append(None)
             else:
-                try:
-                    if output_stats.endswith("..."):
-                        output_stats = f"{output_stats[:output_stats.rindex(',')]}}}"
-                    output_stats = literal_eval(output_stats)
-                except SyntaxError:
-                    output_files_total_count.append(None)
-                    output_files_total_job_stops.append(None)
-                    continue
                 got_cedar_bytes = False
                 for attr in output_stats:
                     if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
@@ -522,7 +432,7 @@ class IgwnScheddCpuFilter(BaseFilter):
                         output_files_bytes += output_stats[attr]
                         if attr.casefold() == "CedarSizeBytesTotal".casefold():
                             got_cedar_bytes = True
-                if not got_cedar_bytes:
+                if not got_cedar_bytes and output_cedar_bytes is not None:
                     output_files_bytes += output_cedar_bytes
                 output_files_total_count.append(output_files_count)
                 output_files_total_bytes.append(output_files_bytes)
@@ -645,7 +555,7 @@ class IgwnScheddCpuFilter(BaseFilter):
             if all(condor_version_tuple < (9, 7, 0) for condor_version_tuple in condor_versions_tuples_list):
                 row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = "-"
             else:
-                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0                    
+                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0
         else:
             row["OSDF Files Xferd"] = osdf_files_count or ""
             if osdf_files_count > 0 and osdf_bytes_total > 0 and total_files > 0 and total_bytes > 0:
@@ -700,18 +610,10 @@ class IgwnScheddCpuFilter(BaseFilter):
 
         # Compute mode for Schedd columns in the Users table
         if agg == "Users":
-            # projects = self.clean(data["ProjectName"])
-            # if len(projects) > 0:
-            #     row["Most Used Project"] = max(set(projects), key=projects.count)
-            # else:
-            #     row["Most Used Project"] = "UNKNOWN"
-
             schedds = self.clean(data["ScheddName"])
             if len(schedds) > 0:
                 row["Most Used Schedd"] = max(set(schedds), key=schedds.count)
             else:
                 row["Most Used Schedd"] = "UNKNOWN"
-        if agg == "Projects":
-            row["Num Users"] = len(set(data["User"]))
 
         return row
