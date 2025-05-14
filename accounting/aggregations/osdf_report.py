@@ -558,40 +558,6 @@ if __name__ == "__main__":
         html.append("\t</tr>")
     html.append("</table>")
 
-    ### ENDPOINT UPLOAD TABLE
-
-    html.append("<h2>Per OSDF origin upload (i.e. output transfer) statistics</h2>")
-
-    cols = ["endpoint_name", "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "endpoint"]
-    hdrs = ["Origin Name",   "Origin Institution",   "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Origin Hostname"]
-    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%",                  "s"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
-
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
-
-    html.append('<table>')
-
-    html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
-    html.append("\t</tr>")
-    for row in endpoint_data["upload"]:
-        row_class = ""
-        if row["pct_failed_attempts"] > err_threshold:
-            row_class = "err"
-        elif row["pct_failed_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
-            try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
-            except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
-        html.append("\t</tr>")
-    html.append("</table>")
-
     ### RESOURCE DOWNLOAD TABLE
 
     html.append("<h2>Per OSPool resource download (i.e. input transfer) statistics</h2>")
@@ -626,9 +592,43 @@ if __name__ == "__main__":
         html.append("\t</tr>")
     html.append("</table>")
 
+    ### ENDPOINT UPLOAD TABLE
+
+    html.append("<h2>Per OSDF origin upload (i.e. output transfer) statistics</h2>")
+
+    cols = ["endpoint_name", "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "endpoint"]
+    hdrs = ["Origin Name",   "Origin Institution",   "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Origin Hostname"]
+    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%",                  "s"]
+    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+
+    hdrs = dict(zip(cols, hdrs))
+    fmts = dict(zip(cols, fmts))
+    stys = dict(zip(cols, stys))
+
+    html.append('<table>')
+
+    html.append("\t<tr>")
+    for col in cols:
+        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    html.append("\t</tr>")
+    for row in endpoint_data["upload"]:
+        row_class = ""
+        if row["pct_failed_attempts"] > err_threshold:
+            row_class = "err"
+        elif row["pct_failed_attempts"] > warn_threshold:
+            row_class = "warn"
+        html.append(f'\t<tr class="{row_class}">')
+        for col in cols:
+            try:
+                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+            except ValueError:
+                html.append(f"\t\t<td>{row[col]}</td>")
+        html.append("\t</tr>")
+    html.append("</table>")
+
     ### RESOURCE UPLOAD TABLE
 
-    html.append("<h2>Per OSDF origin upload (transfer output) statistics</h2>")
+    html.append("<h2>Per OSPool resource upload (transfer output) statistics</h2>")
 
     cols = ["resource_name", "resource_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected"]
     hdrs = ["Resource Name", "Resource Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted"]
