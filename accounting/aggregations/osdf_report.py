@@ -137,6 +137,40 @@ def connect(
     return elasticsearch.Elasticsearch([es_client])
 
 
+# def connect8(
+#         es_host="localhost:9200",
+#         es_user="",
+#         es_pass="",
+#         es_use_https=False,
+#         es_ca_certs=None,
+#         es_url_prefix=None,
+#         **kwargs,
+#     ) -> elasticsearch.Elasticsearch:
+#     # Returns Elasticsearch client
+
+#     es_client = {"hosts": f"http{'s' if es_use_https else ''}://{es_host}{f'/{es_url_prefix}' if es_url_prefix else ''}"}
+
+#     # Include username and password if both are provided
+#     if (not es_user) ^ (not es_pass):
+#         print("Only one of es_user and es_pass have been defined")
+#         print("Connecting to Elasticsearch anonymously")
+#     elif es_user and es_pass:
+#         es_client["basic_auth"] = (es_user, es_pass,)
+
+#     # Only use HTTPS if CA certs are given or if certifi is available
+#     if es_use_https:
+#         if es_ca_certs is not None:
+#             es_client["ca_certs"] = str(es_ca_certs)
+#         elif importlib.util.find_spec("certifi") is not None:
+#             pass
+#         else:
+#             print("Using HTTPS with Elasticsearch requires that either es_ca_certs be provided or certifi library be installed")
+#             sys.exit(1)
+
+#     es_client.update(kwargs)
+#     return elasticsearch.Elasticsearch(**es_client)
+
+
 def get_endpoint_types(
         client: elasticsearch.Elasticsearch,
         index: str,
@@ -211,6 +245,11 @@ def get_query(
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
         query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
 
+    # filter out CHTC jobs that did not run in the OSPool
+    has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("term", machineattrglidein_resourcename0__indexed="Undefined")
+    chtc_local = Q("wildcard", ScheddName="*.chtc.wisc.edu") & ~has_resource_name
+    query = query.query(~chtc_local)
+
     runtime_mappings = {
         "runtime_mappings": {
             "JobId": {
@@ -273,18 +312,19 @@ if __name__ == "__main__":
     else:
         es_args = {arg: v for arg, v in vars(args).items() if arg.startswith("es_")}
     if es_args.get("es_password_file"):
-        es_args["es_pass"] = es_args["es_password_file"].open().read().rstrip()
-    index = es_args.get("es_index", "adstash-ospool-transfer-*")
+        es_args["es_pass"] = es_args.pop("es_password_file").open().read().rstrip()
+    index = es_args.pop("es_index", "adstash-ospool-transfer-*")
 
     if args.start is None:
         args.start = (datetime.now() - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     if args.end is None:
         args.end = args.start + timedelta(days=1)
+    days = (args.end - args.start).days
 
     OSDF_DIRECTOR_SERVERS = get_osdf_director_servers(cache_file=args.cache_dir / "osdf_director_servers.pickle")
     TOPOLOGY_RESOURCE_DATA = get_topology_resource_data(cache_file=args.cache_dir / "topology_resource_data.pickle")
 
-    es = connect(**es_args, timeout=30)
+    es = connect(**es_args, timeout=30 + int(10 * (days**0.75)))
     es.info()
 
     endpoint_types = get_endpoint_types(
@@ -504,7 +544,7 @@ if __name__ == "__main__":
     css = """
     h1 {text-align: center;}
     table {border-collapse: collapse;}
-    th, td {border: 1px solid black}
+    th, td {border: 1px solid black;}
     td.text {text-align: left;}
     td.num {text-align: right;}
     tr.warn {background-color: #ffc;}
@@ -558,40 +598,6 @@ if __name__ == "__main__":
         html.append("\t</tr>")
     html.append("</table>")
 
-    ### ENDPOINT UPLOAD TABLE
-
-    html.append("<h2>Per OSDF origin upload (i.e. output transfer) statistics</h2>")
-
-    cols = ["endpoint_name", "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "endpoint"]
-    hdrs = ["Origin Name",   "Origin Institution",   "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Origin Hostname"]
-    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%",                  "s"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
-
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
-
-    html.append('<table>')
-
-    html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
-    html.append("\t</tr>")
-    for row in endpoint_data["upload"]:
-        row_class = ""
-        if row["pct_failed_attempts"] > err_threshold:
-            row_class = "err"
-        elif row["pct_failed_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
-            try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
-            except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
-        html.append("\t</tr>")
-    html.append("</table>")
-
     ### RESOURCE DOWNLOAD TABLE
 
     html.append("<h2>Per OSPool resource download (i.e. input transfer) statistics</h2>")
@@ -626,9 +632,43 @@ if __name__ == "__main__":
         html.append("\t</tr>")
     html.append("</table>")
 
+    ### ENDPOINT UPLOAD TABLE
+
+    html.append("<h2>Per OSDF origin upload (i.e. output transfer) statistics</h2>")
+
+    cols = ["endpoint_name", "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "endpoint"]
+    hdrs = ["Origin Name",   "Origin Institution",   "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Origin Hostname"]
+    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%",                  "s"]
+    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+
+    hdrs = dict(zip(cols, hdrs))
+    fmts = dict(zip(cols, fmts))
+    stys = dict(zip(cols, stys))
+
+    html.append('<table>')
+
+    html.append("\t<tr>")
+    for col in cols:
+        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    html.append("\t</tr>")
+    for row in endpoint_data["upload"]:
+        row_class = ""
+        if row["pct_failed_attempts"] > err_threshold:
+            row_class = "err"
+        elif row["pct_failed_attempts"] > warn_threshold:
+            row_class = "warn"
+        html.append(f'\t<tr class="{row_class}">')
+        for col in cols:
+            try:
+                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+            except ValueError:
+                html.append(f"\t\t<td>{row[col]}</td>")
+        html.append("\t</tr>")
+    html.append("</table>")
+
     ### RESOURCE UPLOAD TABLE
 
-    html.append("<h2>Per OSDF origin upload (transfer output) statistics</h2>")
+    html.append("<h2>Per OSPool resource upload (transfer output) statistics</h2>")
 
     cols = ["resource_name", "resource_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected"]
     hdrs = ["Resource Name", "Resource Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted"]
@@ -659,6 +699,23 @@ if __name__ == "__main__":
                 html.append(f"\t\t<td>{row[col]}</td>")
         html.append("\t</tr>")
     html.append("</table>")
+
+    legend = {
+        "Total Attempts": "Number of OSDF object transfer attempts (multiple transfer attempts can be made per object per plugin invocation)",
+        "Total Jobs": "Number of unique job IDs that attempted at least one OSDF object transfer",
+        "Successful Attempts": "Number of OSDF object transfer attempts that succeeded",
+        "Successful Jobs": "Number of unique job IDs that had at least one successful OSDF object transfer attempt",
+        "Failed Attempts": "Number of OSDF object transfer attempts that failed (multiple failed transfer attempts can be made per object per plugin invocation)",
+        "Pct Attempts Failed": "Failed Attempts / Total Attempts (as a percentage)",
+        "Failed Attempts per Job": "Failed Attempts / Total Jobs",
+        "Num Jobs w/ Failed Attempts": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt",
+        "Num Jobs Interrupted": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt that resulted in the job activation being terminated (i.e. the transfer plugin ran out of retries)",
+        "Pct Jobs Interrupted": "Num Jobs Interrupted / Total Jobs (as a percentage)",
+    }
+    html.append("<ul>")
+    for term, definition in legend.items():
+        html.append(f"\t<li><strong>{term}</strong>: {definition}</li>")
+    html.append("</ul>")
 
     html.append("</body>")
 
