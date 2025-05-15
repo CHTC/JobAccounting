@@ -700,6 +700,23 @@ if __name__ == "__main__":
         html.append("\t</tr>")
     html.append("</table>")
 
+    legend = {
+        "Total Attempts": "Number of OSDF object transfer attempts (multiple transfer attempts can be made per object per plugin invocation)",
+        "Total Jobs": "Number of unique job IDs that attempted at least one OSDF object transfer",
+        "Successful Attempts": "Number of OSDF object transfer attempts that succeeded",
+        "Successful Jobs": "Number of unique job IDs that had at least one successful OSDF object transfer attempt",
+        "Failed Attempts": "Number of OSDF object transfer attempts that failed (multiple failed transfer attempts can be made per object per plugin invocation)",
+        "Pct Attempts Failed": "Failed Attempts / Total Attempts (as a percentage)",
+        "Failed Attempts per Job": "Failed Attempts / Total Jobs",
+        "Num Jobs w/ Failed Attempts": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt",
+        "Num Jobs Interrupted": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt that resulted in the job activation being terminated (i.e. the transfer plugin ran out of retries)",
+        "Pct Jobs Interrupted": "Num Jobs Interrupted / Total Jobs (as a percentage)",
+    }
+    html.append("<ul>")
+    for term, definition in legend.items():
+        html.append(f"\t<li><strong>{term}</strong>: {definition}</li>")
+    html.append("</ul>")
+
     html.append("</body>")
 
     html.append("</html>")
