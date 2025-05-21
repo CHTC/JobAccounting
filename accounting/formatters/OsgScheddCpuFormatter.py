@@ -115,6 +115,7 @@ class OsgScheddCpuFormatter(BaseFormatter):
             "% Jobs Over Rqst Disk": lambda x: f"<td>{float(x):.1f}</td>",
             "% Ckpt Able":          lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs using S'ty":    lambda x: f"<td>{float(x):.1f}</td>",
+            "% Shadw w/o Start":    lambda x: f"<td>{float(x):.1f}</td>",
             "Input Files / Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Input MB / Exec Att":    lambda x: f"<td>{float(x):.1f}</td>",
             "Input MB / File":        lambda x: f"<td>{float(x):.1f}</td>",

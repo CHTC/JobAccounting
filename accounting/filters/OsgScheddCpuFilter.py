@@ -10,6 +10,7 @@ from accounting.functions import get_job_units, get_topology_project_data, get_t
 
 
 DEFAULT_COLUMNS = {
+     5: "% Shadw w/o Start",
     10: "Num Uniq Job Ids",
     20: "All CPU Hours",
     30: "% Good CPU Hours",
@@ -461,17 +462,17 @@ class OsgScheddCpuFilter(BaseFilter):
         # Add Project and Schedd columns to the Users table
         columns = DEFAULT_COLUMNS.copy()
         if agg == "Users":
-            columns[5] = "Most Used Project"
+            columns[4] = "Most Used Project"
             columns[175] = "Most Used Schedd"
         if agg == "Projects":
             columns[4] = "PI Institution"
-            columns[5] = "Num Users"
-            columns[6] = "Num Site Instns"
-            columns[7] = "Num Sites"
+            columns[6] = "Num Users"
+            columns[7] = "Num Site Instns"
+            columns[8] = "Num Sites"
         if agg == "Institution":
-            columns[4] = "Num Sites"
-            columns[5] = "Num Users"
-            rm_columns = [30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,390]
+            columns[6] = "Num Sites"
+            columns[7] = "Num Users"
+            rm_columns = [5,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,390]
             [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
@@ -825,8 +826,10 @@ class OsgScheddCpuFilter(BaseFilter):
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
         if row["Num Shadw Starts"] > 0:
+            row["% Shadw w/o Start"] = 100 * max(row["Num Shadw Starts"] - row["Num Exec Atts"], 0) / row["Num Shadw Starts"]
             row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
         else:
+            row["% Shadw w/o Start"] = 0
             row["Exec Atts / Shadw Start"] = 0
         if sum(data["_NumBadJobStarts"]) > 0:
             row["CPU Hours / Bad Exec Att"] = (sum(self.clean(badput_cpu_time)) / 3600) / sum(data["_NumBadJobStarts"])
@@ -877,7 +880,7 @@ class OsgScheddCpuFilter(BaseFilter):
             if all(condor_version_tuple < (9, 7, 0) for condor_version_tuple in condor_versions_tuples_list):
                 row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = "-"
             else:
-                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0                    
+                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0
         else:
             row["OSDF Files Xferd"] = osdf_files_count or ""
             if osdf_files_count > 0 and osdf_bytes_total > 0 and total_files > 0 and total_bytes > 0:
