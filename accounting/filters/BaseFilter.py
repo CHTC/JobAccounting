@@ -67,7 +67,7 @@ class BaseFilter:
         # Set the scroll time based on how long the reporting period is.
         # Using 30s + 5s * sqrt(days-1)
         if scroll is None:
-            scroll_seconds = 30 + int(5 * (((end_ts - start_ts) / (3600 * 24)) - 1)**0.5)
+            scroll_seconds = 60 + int(5 * (((end_ts - start_ts) / (3600 * 24)) - 1)**0.5)
             scroll = f"{int(scroll_seconds)}s"
             self.logger.debug(f"No explicit scroll time set, using {scroll}.")
 
