@@ -202,7 +202,8 @@ def main():
                 m = LOG_HTCONDOR_ERROR_RE.match(current_traceback[-1])
                 if m:
                     last_error["htcondor_error"] = m.group("error")
-                errors.append(last_error)
+                if "schedd" in last_error:
+                    errors.append(last_error)
                 last_ckpt = f.tell()
                 continue
             elif in_traceback:
