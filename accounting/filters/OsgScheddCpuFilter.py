@@ -6,7 +6,7 @@ import statistics as stats
 from datetime import date
 from pathlib import Path
 from .BaseFilter import BaseFilter
-from accounting.functions import get_job_units, get_topology_project_data, get_topology_resource_data, get_institution_database
+from accounting.functions import get_job_units, get_topology_project_data, get_topology_resource_data, get_institution_database, get_ospool_aps, get_ospool_collectors, get_non_fairshare_resources
 
 
 DEFAULT_COLUMNS = {
@@ -126,6 +126,68 @@ class OsgScheddCpuFilter(BaseFilter):
         super().__init__(**kwargs)
         self.sort_col = "Num Uniq Job Ids"
         self.topology_project_map = get_topology_project_data()
+
+
+
+    def get_query(self, index, start_ts, end_ts, scroll=None, size=500):
+        # Returns dict matching Elasticsearch.search() kwargs
+        # (Dict has same structure as the REST API query language)
+
+        # Set the scroll time based on how long the reporting period is.
+        # Using 30s + 5s * sqrt(days-1)
+        if scroll is None:
+            scroll_seconds = 60 + int(5 * (((end_ts - start_ts) / (3600 * 24)) - 1)**0.5)
+            scroll = f"{int(scroll_seconds)}s"
+            self.logger.debug(f"No explicit scroll time set, using {scroll}.")
+
+        query = {
+            "index": index,
+            "scroll": scroll,
+            "size": size,
+            "sort": ["_doc"],
+            "track_scores": False,
+            "body": {
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"range": {
+                                "RecordTime": {
+                                   "gte": start_ts,
+                                    "lt": end_ts,
+                                }
+                            }},
+                        ],
+                        "must_not": [
+                            {"terms": {
+                                "JobUniverse": [7, 12]
+                            }},
+                            {"terms": {
+                                "ResourceName": list(get_non_fairshare_resources()),
+                            }},
+                        ],
+                        "minimum_should_match": 1,
+                        "should" : [
+                            {"bool": {
+                                "filter": [
+                                    {"terms": {
+                                        "ScheddName.keyword": list(get_ospool_aps()),
+                                    }},
+                                ],
+                                "must_not": [
+                                    {"exists": {
+                                        "field": "LastRemotePool",
+                                    }},
+                                ],
+                            }},
+                            {"terms": {
+                                "LastRemotePool.keyword": list(get_ospool_collectors()),
+                            }},
+                        ],
+                    }
+                }
+            }
+        }
+        return query
 
 
     def schedd_collector_host(self, schedd):

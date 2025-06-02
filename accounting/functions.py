@@ -7,6 +7,8 @@ import time
 import pickle
 import json
 import xml.etree.ElementTree as ET
+import re
+
 from urllib.request import urlopen
 from urllib.error import HTTPError
 from pathlib import Path
@@ -16,8 +18,10 @@ from email.mime.text  import MIMEText
 from email.mime.base import MIMEBase
 from email.utils import formatdate
 from email import encoders
-from dns.resolver import query as dns_query
 
+import htcondor
+
+from dns.resolver import query as dns_query
 
 INSTITUTION_DATABASE_URL = "https://topology-institutions.osg-htc.org/api/institution_ids"
 TOPOLOGY_PROJECT_DATA_URL = "https://topology.opensciencegrid.org/miscproject/xml"
@@ -196,6 +200,58 @@ def get_topology_resource_data(cache_file=Path("./topology_resource_data.pickle"
 
     pickle.dump(resources_data, cache_file.open("wb"))
     return resources_data
+
+
+def get_ospool_collectors() -> list:
+    ospool_collectors = ["cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"]
+    return ospool_collectors
+
+
+def get_ospool_aps(cache_file=Path("./ospool-host-map.pkl")) -> list:
+    ospool_collectors = set(get_ospool_collectors())
+    aps_collectors = {}
+
+    # Use cache if less than 20 minutes old
+    if cache_file.exists():
+        try:
+            aps_collectors = pickle.load(cache_file.open("rb"))
+        except Exception:
+            pass
+    if len(aps_collectors) > 0 and cache_file.stat().st_mtime > time.time() - 1200:
+        return [ap for ap, ap_collectors in aps_collectors.items() if set(ap_collectors) & ospool_collectors]
+
+    for ospool_collector in ospool_collectors:
+        if ospool_collector in {"flock.opensciencegrid.org"}:
+            continue
+        collector = htcondor.Collector(ospool_collector)
+        try:
+            ads = collector.query(
+                htcondor.AdTypes.Schedd,
+                projection=["Name", "CollectorHost"],
+            )
+        except htcondor.HTCondorIOError:
+            continue
+
+        for ad in ads:
+            if "Name" not in ad or "CollectorHost" not in ad:
+                continue
+            ap = ad["Name"]
+            aps_collectors[ap] = re.split(r'[, ]+', ad["CollectorHost"])
+
+    pickle.dump(aps_collectors, cache_file.open("wb"))
+    return [ap for ap, ap_collectors in aps_collectors.items() if set(ap_collectors) & ospool_collectors]
+
+
+def get_non_fairshare_resources() -> list:
+    non_fairshare_resources = [
+        "SURFsara",
+        "NIKHEF-ELPROD",
+        "INFN-T1",
+        "IN2P3-CC",
+        "UIUC-ICC-SPT",
+        "TACC-Frontera-CE2",
+    ]
+    return non_fairshare_resources
 
 
 def get_timestamps(report_period, start_ts, end_ts):
