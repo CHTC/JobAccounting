@@ -36,7 +36,8 @@ ELASTICSEARCH_ARGS = {
     "--es-config-file": {
         "type": Path,
         "help": "JSON file containing an object that sets above ES options",
-    }
+    },
+    "--es-timeout": {"type": int},
 }
 
 JOB_ID_SCRIPT_SRC = """
@@ -324,7 +325,9 @@ if __name__ == "__main__":
     OSDF_DIRECTOR_SERVERS = get_osdf_director_servers(cache_file=args.cache_dir / "osdf_director_servers.pickle")
     TOPOLOGY_RESOURCE_DATA = get_topology_resource_data(cache_file=args.cache_dir / "topology_resource_data.pickle")
 
-    es = connect(**es_args, timeout=30 + int(10 * (days**0.75)))
+    if "timeout" not in es_args:
+        es_args["timeout"] = 60 + int(10 * (days**0.75))
+    es = connect(**es_args)
     es.info()
 
     endpoint_types = get_endpoint_types(
