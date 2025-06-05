@@ -325,7 +325,8 @@ if __name__ == "__main__":
     OSDF_DIRECTOR_SERVERS = get_osdf_director_servers(cache_file=args.cache_dir / "osdf_director_servers.pickle")
     TOPOLOGY_RESOURCE_DATA = get_topology_resource_data(cache_file=args.cache_dir / "topology_resource_data.pickle")
 
-    if "timeout" not in es_args:
+    es_args["timeout"] = es_args.pop("es_timeout")
+    if not es_args["timeout"]:
         es_args["timeout"] = 60 + int(10 * (days**0.75))
     es = connect(**es_args)
     es.info()
