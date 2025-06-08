@@ -188,7 +188,7 @@ def get_endpoint_types(
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
-        query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
+        query = query.query(~Q("prefix", TransferUrl__indexed="osdf:///chtc/staging") & (Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org")))
     endpoint_agg = A(
         "terms",
         field="Endpoint",
@@ -244,7 +244,7 @@ def get_query(
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
-        query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
+        query = query.query(~Q("prefix", TransferUrl__indexed="osdf:///chtc/staging") & (Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org")))
 
     # filter out CHTC jobs that did not run in the OSPool
     has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("term", machineattrglidein_resourcename0__indexed="Undefined")
@@ -325,7 +325,7 @@ if __name__ == "__main__":
     OSDF_DIRECTOR_SERVERS = get_osdf_director_servers(cache_file=args.cache_dir / "osdf_director_servers.pickle")
     TOPOLOGY_RESOURCE_DATA = get_topology_resource_data(cache_file=args.cache_dir / "topology_resource_data.pickle")
 
-    es_args["timeout"] = es_args.pop("es_timeout")
+    es_args["timeout"] = es_args.pop("es_timeout", None)
     if not es_args["timeout"]:
         es_args["timeout"] = 60 + int(10 * (days**0.75))
     es = connect(**es_args)
@@ -458,37 +458,44 @@ if __name__ == "__main__":
                 "endpoint_institution": endpoint_institution,
                 "endpoint_name": endpoint_name,
                 "endpoint_type": OSDF_DIRECTOR_SERVERS.get(f"https://{endpoint}", {"type": ""}).get("type", "") or "Cache*",
-                "total_attempts": all_transfer_type_data[transfer_type]["endpoint"][endpoint]["value"],
-                "total_attempts_jobs": all_transfer_type_data[transfer_type]["endpoint"][endpoint]["unique_jobs"],
-                "success_attempts": success_transfer_type_data[transfer_type]["endpoint"].get(endpoint, empty_row.copy())["value"],
-                "success_attempts_jobs": success_transfer_type_data[transfer_type]["endpoint"].get(endpoint, empty_row.copy())["unique_jobs"],
-                "final_failed_attempts": final_failed_transfer_type_data[transfer_type]["endpoint"].get(endpoint, empty_row.copy())["value"],
-                "final_failed_attempts_jobs": final_failed_transfer_type_data[transfer_type]["endpoint"].get(endpoint, empty_row.copy())["unique_jobs"],
-                "all_failed_attempts": all_failed_transfer_type_data[transfer_type]["endpoint"].get(endpoint, empty_row.copy())["value"],
-                "all_failed_attempts_jobs": all_failed_transfer_type_data[transfer_type]["endpoint"].get(endpoint, empty_row.copy())["unique_jobs"],
             }
+            for attempt_type, attempt_data in {
+                "total_attempts": all_transfer_type_data,
+                "success_attempts": success_transfer_type_data,
+                "final_failed_attempts": final_failed_transfer_type_data,
+                "all_failed_attempts": all_failed_transfer_type_data,
+            }.items():
+                try:
+                    row[attempt_type] = attempt_data[transfer_type]["endpoint"][endpoint]["value"]
+                    row[f"{attempt_type}_jobs"] = attempt_data[transfer_type]["endpoint"][endpoint]["unique_jobs"]
+                except KeyError:
+                    row[attempt_type] = 0
+                    row[f"{attempt_type}_jobs"] = 0
             row["pct_failed_attempts"] = row["all_failed_attempts"] / max(row["total_attempts"], row["all_failed_attempts"], 1)
             row["failed_attempts_per_job"] = row["all_failed_attempts"] / max(row["total_attempts_jobs"], row["all_failed_attempts"], 1)
             row["pct_jobs_affected"] = row["final_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["final_failed_attempts_jobs"], 1)
             endpoint_data[transfer_type].append(row)
 
-    endpoint_data_totals = {
-        transfer_type: {
+    endpoint_data_totals = {}
+    for transfer_type in ("download", "upload"):
+        endpoint_data_totals[transfer_type] = {
             "endpoint": "",
             "endpoint_institution": "",
             "endpoint_name": "TOTALS",
             "endpoint_type": "",
-            "total_attempts": int(all_transfer_type_data[transfer_type]["value"]),
-            "total_attempts_jobs": int(all_transfer_type_data[transfer_type]["unique_jobs"]),
-            "success_attempts": int(success_transfer_type_data[transfer_type]["value"]),
-            "success_attempts_jobs": int(success_transfer_type_data[transfer_type]["unique_jobs"]),
-            "all_failed_attempts": int(all_failed_transfer_type_data[transfer_type]["value"]),
-            "all_failed_attempts_jobs": int(all_failed_transfer_type_data[transfer_type]["unique_jobs"]),
-            "failed_final_attempt": int(final_failed_transfer_type_data[transfer_type]["value"]),
-            "final_failed_attempts_jobs": int(final_failed_transfer_type_data[transfer_type]["unique_jobs"]),
         }
-        for transfer_type in ("download", "upload")}
-    for transfer_type in ("download", "upload"):
+        for attempt_type, attempt_data in {
+            "total_attempts": all_transfer_type_data,
+            "success_attempts": success_transfer_type_data,
+            "final_failed_attempts": final_failed_transfer_type_data,
+            "all_failed_attempts": all_failed_transfer_type_data,
+        }.items():
+            try:
+                endpoint_data_totals[transfer_type][attempt_type] = attempt_data[transfer_type]["value"]
+                endpoint_data_totals[transfer_type][f"{attempt_type}_jobs"] = attempt_data[transfer_type]["unique_jobs"]
+            except KeyError:
+                endpoint_data_totals[transfer_type][attempt_type] = 0
+                endpoint_data_totals[transfer_type][f"{attempt_type}_jobs"] = 0
         endpoint_data_totals[transfer_type]["pct_failed_attempts"] = endpoint_data_totals[transfer_type]["all_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts"], endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
         endpoint_data_totals[transfer_type]["failed_attempts_per_job"] = endpoint_data_totals[transfer_type]["all_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts_jobs"], endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
         endpoint_data_totals[transfer_type]["pct_jobs_affected"] = endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"] / max(endpoint_data_totals[transfer_type]["total_attempts_jobs"], endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
@@ -507,35 +514,42 @@ if __name__ == "__main__":
             row = {
                 "resource_name": resource_name,
                 "resource_institution": resource_institution,
-                "total_attempts": all_transfer_type_data[transfer_type]["resource_name"][resource_name]["value"],
-                "total_attempts_jobs": all_transfer_type_data[transfer_type]["resource_name"][resource_name]["unique_jobs"],
-                "success_attempts": success_transfer_type_data[transfer_type]["resource_name"].get(resource_name, empty_row.copy())["value"],
-                "success_attempts_jobs": success_transfer_type_data[transfer_type]["resource_name"].get(resource_name, empty_row.copy())["unique_jobs"],
-                "final_failed_attempts": final_failed_transfer_type_data[transfer_type]["resource_name"].get(resource_name, empty_row.copy())["value"],
-                "final_failed_attempts_jobs": final_failed_transfer_type_data[transfer_type]["resource_name"].get(resource_name, empty_row.copy())["unique_jobs"],
-                "all_failed_attempts": all_failed_transfer_type_data[transfer_type]["resource_name"].get(resource_name, empty_row.copy())["value"],
-                "all_failed_attempts_jobs": all_failed_transfer_type_data[transfer_type]["resource_name"].get(resource_name, empty_row.copy())["unique_jobs"],
             }
+            for attempt_type, attempt_data in {
+                "total_attempts": all_transfer_type_data,
+                "success_attempts": success_transfer_type_data,
+                "final_failed_attempts": final_failed_transfer_type_data,
+                "all_failed_attempts": all_failed_transfer_type_data,
+            }.items():
+                try:
+                    row[attempt_type] = attempt_data[transfer_type]["resource_name"][resource_name]["value"]
+                    row[f"{attempt_type}_jobs"] = attempt_data[transfer_type]["resource_name"][resource_name]["unique_jobs"]
+                except KeyError:
+                    row[attempt_type] = 0
+                    row[f"{attempt_type}_jobs"] = 0
             row["pct_failed_attempts"] = row["all_failed_attempts"] / max(row["total_attempts"], row["all_failed_attempts"], 1)
             row["failed_attempts_per_job"] = row["all_failed_attempts"] / max(row["total_attempts_jobs"], row["all_failed_attempts"], 1)
             row["pct_jobs_affected"] = row["final_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["final_failed_attempts_jobs"], 1)
             resource_name_data[transfer_type].append(row)
 
-    resource_name_data_totals = {
-        transfer_type: {
+    resource_name_data_totals = {}
+    for transfer_type in ("download", "upload"):
+        resource_name_data_totals[transfer_type] = {
             "resource_name": "TOTALS",
             "resource_institution": "",
-            "total_attempts": int(all_transfer_type_data[transfer_type]["value"]),
-            "total_attempts_jobs": int(all_transfer_type_data[transfer_type]["unique_jobs"]),
-            "success_attempts": int(success_transfer_type_data[transfer_type]["value"]),
-            "success_attempts_jobs": int(success_transfer_type_data[transfer_type]["unique_jobs"]),
-            "all_failed_attempts": int(all_failed_transfer_type_data[transfer_type]["value"]),
-            "all_failed_attempts_jobs": int(all_failed_transfer_type_data[transfer_type]["unique_jobs"]),
-            "failed_final_attempt": int(final_failed_transfer_type_data[transfer_type]["value"]),
-            "final_failed_attempts_jobs": int(final_failed_transfer_type_data[transfer_type]["unique_jobs"]),
         }
-        for transfer_type in ("download", "upload")}
-    for transfer_type in ("download", "upload"):
+        for attempt_type, attempt_data in {
+            "total_attempts": all_transfer_type_data,
+            "success_attempts": success_transfer_type_data,
+            "final_failed_attempts": final_failed_transfer_type_data,
+            "all_failed_attempts": all_failed_transfer_type_data,
+        }.items():
+            try:
+                resource_name_data_totals[transfer_type][attempt_type] = attempt_data[transfer_type]["value"]
+                resource_name_data_totals[transfer_type][f"{attempt_type}_jobs"] = attempt_data[transfer_type]["unique_jobs"]
+            except KeyError:
+                resource_name_data_totals[transfer_type][attempt_type] = 0
+                resource_name_data_totals[transfer_type][f"{attempt_type}_jobs"] = 0
         resource_name_data_totals[transfer_type]["pct_failed_attempts"] = resource_name_data_totals[transfer_type]["all_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts"], resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["failed_attempts_per_job"] = resource_name_data_totals[transfer_type]["all_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["pct_jobs_affected"] = resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
