@@ -188,7 +188,7 @@ def get_endpoint_types(
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
-        query = query.query(~Q("prefix", TransferUrl__indexed="osdf:///chtc/staging") & (Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org")))
+        query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
     endpoint_agg = A(
         "terms",
         field="Endpoint",
@@ -244,10 +244,10 @@ def get_query(
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
-        query = query.query(~Q("prefix", TransferUrl__indexed="osdf:///chtc/staging") & (Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org")))
+        query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
 
     # filter out CHTC jobs that did not run in the OSPool
-    has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("term", machineattrglidein_resourcename0__indexed="Undefined")
+    has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("terms", machineattrglidein_resourcename0__indexed=["Undefined", "2"])
     chtc_local = Q("wildcard", ScheddName="*.chtc.wisc.edu") & ~has_resource_name
     query = query.query(~chtc_local)
 
