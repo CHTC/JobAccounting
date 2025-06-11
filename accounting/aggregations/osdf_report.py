@@ -248,7 +248,7 @@ def get_query(
 
     # filter out CHTC jobs that did not run in the OSPool
     has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("terms", machineattrglidein_resourcename0__indexed=["Undefined", "2"])
-    chtc_local = Q("wildcard", ScheddName="*.chtc.wisc.edu") & ~has_resource_name
+    chtc_local = (Q("wildcard", ScheddName="*.wisc.edu") | Q("wildcard", ScheddName="*.glbrc.org") | Q("wildcard", ScheddName="*.nmrbox.org")) & ~has_resource_name
     query = query.query(~chtc_local)
 
     runtime_mappings = {
