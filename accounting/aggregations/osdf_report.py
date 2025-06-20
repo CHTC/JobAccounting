@@ -247,9 +247,12 @@ def get_query(
         query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
 
     # filter out CHTC jobs that did not run in the OSPool
-    has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("terms", machineattrglidein_resourcename0__indexed=["Undefined", "2"])
+    has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("term", machineattrglidein_resourcename0__indexed="Undefined")
     chtc_local = (Q("wildcard", ScheddName="*.wisc.edu") | Q("wildcard", ScheddName="*.glbrc.org") | Q("wildcard", ScheddName="*.nmrbox.org")) & ~has_resource_name
     query = query.query(~chtc_local)
+
+    # filter out weird resource names
+    query = query.query(~Q("term", machineattrglidein_resourcename0__indexed="2"))
 
     runtime_mappings = {
         "runtime_mappings": {
