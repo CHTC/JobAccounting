@@ -1,0 +1,14 @@
+FROM ghcr.io/mamba-org/micromamba:2.0.8-debian12-slim
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
+
+RUN micromamba install -y -c conda-forge "python=3.11" "requests" "dnspython" "pyyaml" && \
+    micromamba clean --all --yes
+
+USER root
+ARG SCRIPT_DIR=/opt/monitoring_scripts
+RUN mkdir -p ${SCRIPT_DIR}/lib
+
+COPY monitoring/ingest_monitor.py $SCRIPT_DIR/lib/
+COPY monitoring/functions.py $SCRIPT_DIR/lib/
+
+ENV PYTHONPATH=${SCRIPT_DIR}/lib
