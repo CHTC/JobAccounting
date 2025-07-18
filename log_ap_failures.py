@@ -1,4 +1,5 @@
 import argparse
+import traceback
 import json
 import re
 import importlib
@@ -99,7 +100,7 @@ def connect(es_host, es_user, es_pass, es_use_https, es_ca_certs, **kwargs) -> e
         es_client["http_auth"] = (es_user, es_pass)
 
     if "es_url_prefix" in kwargs:
-        es_client["url_prefix"] = kwargs["es_url_prefix"]
+        es_client["url_prefix"] = kwargs.pop("es_url_prefix")
 
     # Only use HTTPS if CA certs are given or if certifi is available
     if es_use_https:
@@ -114,7 +115,7 @@ def connect(es_host, es_user, es_pass, es_use_https, es_ca_certs, **kwargs) -> e
         es_client["use_ssl"] = True
         es_client["verify_certs"] = True
 
-    return elasticsearch.Elasticsearch([es_client])
+    return elasticsearch.Elasticsearch([es_client], **kwargs)
 
 
 def make_index(client, index):
@@ -150,8 +151,12 @@ def push_stats_to_es(schedd_stats, index, **es_args):
     print(f"Making index {index}")
     make_index(es, index)
     for schedd, stats in schedd_stats.items():
+        print(f"Pushing data for AP {schedd}")
         doc_id = f"schedd-stats_{schedd}_{stats.get('timestamp_start')}_{stats.get('timestamp_end')}"
-        es.index(index=index, id=doc_id, body=stats)
+        try:
+            es.index(index=index, id=doc_id, body=stats)
+        except Exception as err:
+            print(f"Got error {str(err)} when pushing {doc_id}, continuing...")
 
 
 def main():
@@ -261,4 +266,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        traceback.print_exc(file=sys.stdout)
+        sys.exit(1)
