@@ -385,6 +385,7 @@ if __name__ == "__main__":
     success_filter = Q("term", TransferSuccess=True)
     final_attempt_failure_filter = Q("term", FinalAttempt=True) & Q("term", TransferSuccess=False)
     all_attempt_failure_filter = Q("term", FinalAttempt=False) | final_attempt_failure_filter
+    filenotfound_attempt_failure_filter = Q("term", DebugErrorType="Specification.FileNotFound")
 
     base_query = base_query.query(osdf_filter)
     success_query = base_query.query(success_filter)
@@ -392,6 +393,10 @@ if __name__ == "__main__":
     final_attempt_failure_query = base_query.query(final_attempt_failure_filter)
 
     all_attempt_failure_query = base_query.query(all_attempt_failure_filter)
+
+    filenotfound_attempt_failure_query = base_query.query(filenotfound_attempt_failure_filter)
+
+    final_filenotfound_attempt_failure_query = filenotfound_attempt_failure_query.query(final_attempt_failure_filter)
 
     base_query.aggs.bucket("transfer_type", transfer_type_agg)
     base_query.aggs.bucket("resource_name", resource_name_agg)
@@ -409,6 +414,14 @@ if __name__ == "__main__":
     all_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     all_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
+    filenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
+    filenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
+    filenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
+
+    final_filenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
+    final_filenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
+    final_filenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
+
     print(f"{datetime.now()} - Running queries")
     try:
         all_attempts = base_query.execute()
@@ -421,6 +434,12 @@ if __name__ == "__main__":
         time.sleep(1)
 
         all_failed_attempts = all_attempt_failure_query.execute()
+        time.sleep(1)
+
+        filenotfound_failed_attempts = filenotfound_attempt_failure_query.execute()
+        time.sleep(1)
+
+        final_filenotfound_failed_attempts = final_filenotfound_attempt_failure_query.execute()
     except Exception as err:
         try:
             print_error(err.info)
@@ -440,6 +459,12 @@ if __name__ == "__main__":
 
     all_failed_transfer_type_data = convert_buckets_to_dict(all_failed_attempts.aggregations.transfer_type.buckets)
     all_failed_resource_name_data = convert_buckets_to_dict(all_failed_attempts.aggregations.resource_name.buckets)
+
+    filenotfound_failed_transfer_type_data = convert_buckets_to_dict(filenotfound_failed_attempts.aggregations.transfer_type.buckets)
+    filenotfound_failed_resource_name_data = convert_buckets_to_dict(filenotfound_failed_attempts.aggregations.resource_name.buckets)
+
+    final_filenotfound_failed_transfer_type_data = convert_buckets_to_dict(final_filenotfound_failed_attempts.aggregations.transfer_type.buckets)
+    final_filenotfound_failed_resource_name_data = convert_buckets_to_dict(final_filenotfound_failed_attempts.aggregations.resource_name.buckets)
 
     empty_row = {"value": 0, "unique_jobs": 0}
 
@@ -467,6 +492,8 @@ if __name__ == "__main__":
                 "success_attempts": success_transfer_type_data,
                 "final_failed_attempts": final_failed_transfer_type_data,
                 "all_failed_attempts": all_failed_transfer_type_data,
+                "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
+                "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
             }.items():
                 try:
                     row[attempt_type] = attempt_data[transfer_type]["endpoint"][endpoint]["value"]
@@ -475,8 +502,10 @@ if __name__ == "__main__":
                     row[attempt_type] = 0
                     row[f"{attempt_type}_jobs"] = 0
             row["pct_failed_attempts"] = row["all_failed_attempts"] / max(row["total_attempts"], row["all_failed_attempts"], 1)
+            row["pct_failed_attempts_404"] = row["filenotfound_failed_attempts"] / max(row["all_failed_attempts"], 1)
             row["failed_attempts_per_job"] = row["all_failed_attempts"] / max(row["total_attempts_jobs"], row["all_failed_attempts"], 1)
             row["pct_jobs_affected"] = row["final_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["final_failed_attempts_jobs"], 1)
+            row["pct_jobs_affected_404"] = row["final_filenotfound_failed_attempts_jobs"] / max(row["final_failed_attempts_jobs"], 1)
             endpoint_data[transfer_type].append(row)
 
     endpoint_data_totals = {}
@@ -492,6 +521,8 @@ if __name__ == "__main__":
             "success_attempts": success_transfer_type_data,
             "final_failed_attempts": final_failed_transfer_type_data,
             "all_failed_attempts": all_failed_transfer_type_data,
+            "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
+            "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
         }.items():
             try:
                 endpoint_data_totals[transfer_type][attempt_type] = attempt_data[transfer_type]["value"]
@@ -500,8 +531,10 @@ if __name__ == "__main__":
                 endpoint_data_totals[transfer_type][attempt_type] = 0
                 endpoint_data_totals[transfer_type][f"{attempt_type}_jobs"] = 0
         endpoint_data_totals[transfer_type]["pct_failed_attempts"] = endpoint_data_totals[transfer_type]["all_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts"], endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
+        endpoint_data_totals[transfer_type]["pct_failed_attempts_404"] = endpoint_data_totals[transfer_type]["filenotfound_failed_attempts"] / max(endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
         endpoint_data_totals[transfer_type]["failed_attempts_per_job"] = endpoint_data_totals[transfer_type]["all_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts_jobs"], endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
         endpoint_data_totals[transfer_type]["pct_jobs_affected"] = endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"] / max(endpoint_data_totals[transfer_type]["total_attempts_jobs"], endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
+        endpoint_data_totals[transfer_type]["pct_jobs_affected_404"] = endpoint_data_totals[transfer_type]["final_filenotfound_failed_attempts_jobs"] / max(endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
         endpoint_data[transfer_type].sort(key=itemgetter("total_attempts"), reverse=True)
         endpoint_data[transfer_type].insert(0, endpoint_data_totals[transfer_type])
 
@@ -523,6 +556,8 @@ if __name__ == "__main__":
                 "success_attempts": success_transfer_type_data,
                 "final_failed_attempts": final_failed_transfer_type_data,
                 "all_failed_attempts": all_failed_transfer_type_data,
+                "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
+                "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
             }.items():
                 try:
                     row[attempt_type] = attempt_data[transfer_type]["resource_name"][resource_name]["value"]
@@ -531,8 +566,10 @@ if __name__ == "__main__":
                     row[attempt_type] = 0
                     row[f"{attempt_type}_jobs"] = 0
             row["pct_failed_attempts"] = row["all_failed_attempts"] / max(row["total_attempts"], row["all_failed_attempts"], 1)
+            row["pct_failed_attempts_404"] = row["filenotfound_failed_attempts"] / max(row["all_failed_attempts"], 1)
             row["failed_attempts_per_job"] = row["all_failed_attempts"] / max(row["total_attempts_jobs"], row["all_failed_attempts"], 1)
             row["pct_jobs_affected"] = row["final_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["final_failed_attempts_jobs"], 1)
+            row["pct_jobs_affected_404"] = row["final_filenotfound_failed_attempts_jobs"] / max(row["final_failed_attempts_jobs"], 1)
             resource_name_data[transfer_type].append(row)
 
     resource_name_data_totals = {}
@@ -546,6 +583,8 @@ if __name__ == "__main__":
             "success_attempts": success_transfer_type_data,
             "final_failed_attempts": final_failed_transfer_type_data,
             "all_failed_attempts": all_failed_transfer_type_data,
+            "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
+            "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
         }.items():
             try:
                 resource_name_data_totals[transfer_type][attempt_type] = attempt_data[transfer_type]["value"]
@@ -554,8 +593,10 @@ if __name__ == "__main__":
                 resource_name_data_totals[transfer_type][attempt_type] = 0
                 resource_name_data_totals[transfer_type][f"{attempt_type}_jobs"] = 0
         resource_name_data_totals[transfer_type]["pct_failed_attempts"] = resource_name_data_totals[transfer_type]["all_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts"], resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_failed_attempts_404"] = resource_name_data_totals[transfer_type]["filenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["failed_attempts_per_job"] = resource_name_data_totals[transfer_type]["all_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["pct_jobs_affected"] = resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
+        resource_name_data_totals[transfer_type]["pct_jobs_affected_404"] = resource_name_data_totals[transfer_type]["final_filenotfound_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
         resource_name_data[transfer_type].sort(key=itemgetter("pct_failed_attempts"), reverse=True)
         resource_name_data[transfer_type].insert(0, resource_name_data_totals[transfer_type])
 
@@ -589,9 +630,9 @@ if __name__ == "__main__":
 
     html.append("<h2>Per OSDF endpoint download (i.e. input transfer) statistics</h2>")
 
-    cols = ["endpoint_name",    "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "endpoint",          "endpoint_type"]
-    hdrs = ["Endpoint Name",    "Endpoint Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Endpoint Hostname", "Endpoint Type"]
-    fmts = ["s",                "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%",                  "s",                 "s"]
+    cols = ["endpoint_name",    "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "filenotfound_failed_attempts", "pct_failed_attempts", "pct_failed_attempts_404", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "pct_jobs_affected_404",    "endpoint",          "endpoint_type"]
+    hdrs = ["Endpoint Name",    "Endpoint Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "404'd Attempts",               "Pct Attempts Failed", "Pct Failed Attempts 404", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Pct Interrupted Jobs 404", "Endpoint Hostname", "Endpoint Type"]
+    fmts = ["s",                "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ",d",                           ".1%",                 ".1%",                     ",.2f",                    ",d",                          ",d",                         ".1%",                  ".1%",                      "s",                 "s"]
     stys = ["text" if fmt == "s" else "num" for fmt in fmts]
 
     hdrs = dict(zip(cols, hdrs))
@@ -623,9 +664,9 @@ if __name__ == "__main__":
 
     html.append("<h2>Per OSPool resource download (i.e. input transfer) statistics</h2>")
 
-    cols = ["resource_name", "resource_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected"]
-    hdrs = ["Resource Name", "Resource Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted"]
-    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%"]
+    cols = ["resource_name", "resource_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "filenotfound_failed_attempts", "pct_failed_attempts", "pct_failed_attempts_404", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "pct_jobs_affected_404"]
+    hdrs = ["Resource Name", "Resource Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "404'd Attempts",               "Pct Attempts Failed", "Pct Failed Attempts 404", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Pct Interrupted Jobs 404"]
+    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ",d",                           ".1%",                 ".1%",                     ",.2f",                    ",d",                          ",d",                         ".1%",                  ".1%"]
     stys = ["text" if fmt == "s" else "num" for fmt in fmts]
 
     hdrs = dict(zip(cols, hdrs))
@@ -727,11 +768,14 @@ if __name__ == "__main__":
         "Successful Attempts": "Number of OSDF object transfer attempts that succeeded",
         "Successful Jobs": "Number of unique job IDs that had at least one successful OSDF object transfer attempt",
         "Failed Attempts": "Number of OSDF object transfer attempts that failed (multiple failed transfer attempts can be made per object per plugin invocation)",
+        "404'd Attempts" : "Number of OSDF object transfer attempts that failed due to FileNotFound error",
         "Pct Attempts Failed": "Failed Attempts / Total Attempts (as a percentage)",
+        "Pct Failed Attempts 404": "404'd Attempts / Failed Attempts (as a percentage)",
         "Failed Attempts per Job": "Failed Attempts / Total Jobs",
         "Num Jobs w/ Failed Attempts": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt",
         "Num Jobs Interrupted": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt that resulted in the job activation being terminated (i.e. the transfer plugin ran out of retries)",
         "Pct Jobs Interrupted": "Num Jobs Interrupted / Total Jobs (as a percentage)",
+        "Pct Interrupted Jobs 404": "Num Jobs Interrupted due to FileNotFound error / Num Jobs Interrupted(as a percentage)",
     }
     html.append("<ul>")
     for term, definition in legend.items():
