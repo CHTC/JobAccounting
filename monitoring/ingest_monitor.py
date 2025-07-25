@@ -29,6 +29,14 @@ EMAIL_ARGS = {
 }
 
 
+DEFAULT_COMPARISON_PERIODS = {
+    "half hour": {"diff": 1800,      "err": 600},
+    "hour":      {"diff": 3600,      "err": 900},
+    "day":       {"diff": 24*3600,   "err": 3600},
+    "week":      {"diff": 7*24*3600, "err": 24*3600},
+}
+
+
 def log(msg: str, level="INFO", **kwargs):
     out = {
         "timestamp": datetime.now().isoformat(),
@@ -207,25 +215,24 @@ def write_indices_counts_json(db: dict, db_path: Path) -> bool:
     return True
 
 
-def compare_counts(counts_db: dict) -> dict:
+def compare_counts(counts_db: dict, indices_config: dict) -> dict:
     '''Find the nearest timestamp within some error range to the last half hour, hour, day, or week,
     then compute the difference and rate of change of doc counts and disk sizes for each period.'''
-    periods = {
-        "half hour": {"diff": 1800,      "err": 600},
-        "hour":      {"diff": 3600,      "err": 900},
-        "day":       {"diff": 24*3600,   "err": 3600},
-        "week":      {"diff": 7*24*3600, "err": 24*3600},
-    }
+
+    alert_periods = {}
+    for index, index_config in indices_config.items():
+        alert_seconds = int(index_config.get("alert_seconds", 3600))
+        alert_periods[index] = {"diff": alert_seconds, "err": alert_seconds // 4}
 
     closest_timestamp = {
         period: {"delta": 2e16, "ts": None}
-        for period in periods
+        for period in DEFAULT_COMPARISON_PERIODS | alert_periods
     }
 
     now_ts = int(NOW.timestamp())
     for ts in counts_db.keys():
         seconds_ago = now_ts - int(ts)
-        for period, threshold in periods.items():
+        for period, threshold in (DEFAULT_COMPARISON_PERIODS | alert_periods).items():
             delta = abs(seconds_ago - threshold["diff"])
             if delta < threshold["err"] and delta < closest_timestamp[period]["delta"]:
                 closest_timestamp[period] = {"delta": delta, "ts": ts}
@@ -235,26 +242,48 @@ def compare_counts(counts_db: dict) -> dict:
 
     comparisons = {}
     for period, then_ts in closest_timestamp.items():
-        if then_ts is None:
-            log(f"No comparable data from a {period} ago", level="WARN")
-            continue
-        delta_t = int(now_ts) - int(then_ts)
-        now = counts_db[now_ts]
-        then = counts_db[then_ts]
-
-        now_indices = set(now.keys())
-        then_indices = set(then.keys())
-        for missing_index in now_indices ^ then_indices:
-            log(f"Index {missing_index} has no comparable numbers from a {period} ago", level="ERROR")
-
         attrs = ["docs_count", "store_size", "pri_store_size"]
-        comparisons[period] = {
-            index: {
-                **{attr: now[index][attr] - then[index][attr] for attr in attrs},
-                **{f"{attr}_per_s": (now[index][attr] - then[index][attr])/delta_t for attr in attrs},
-                "bytes_per_doc": (now[index]["pri_store_size"] - then[index]["pri_store_size"])/max(now[index]["docs_count"] - then[index]["docs_count"], 1),
-            } for index in now_indices & then_indices
-        }
+
+        if period in DEFAULT_COMPARISON_PERIODS:
+            if then_ts is None:
+                log(f"No comparable data from a {period} ago", level="WARN")
+                continue
+            delta_t = int(now_ts) - int(then_ts)
+            now = counts_db[now_ts]
+            then = counts_db[then_ts]
+
+            now_indices = set(now.keys())
+            then_indices = set(then.keys())
+            for missing_index in now_indices ^ then_indices:
+                log(f"Index {missing_index} has no comparable numbers from a {period} ago", level="ERROR")
+
+            comparisons[period] = {
+                index: {
+                    **{attr: now[index][attr] - then[index][attr] for attr in attrs},
+                    **{f"{attr}_per_s": (now[index][attr] - then[index][attr])/delta_t for attr in attrs},
+                    "bytes_per_doc": (now[index]["pri_store_size"] - then[index]["pri_store_size"])/max(now[index]["docs_count"] - then[index]["docs_count"], 1),
+                } for index in now_indices & then_indices
+            }
+
+        if period in alert_periods:
+            index = period
+            if then_ts is None:
+                log(f"No comparable data from {alert_periods[period]['diff']} seconds ago for index {index}", level="ERROR")
+                continue
+            delta_t = int(now_ts) - int(then_ts)
+            now = counts_db[now_ts]
+            then = counts_db[then_ts]
+            if index not in set(then.keys()) & set(now.keys()):
+                log(f"No comparable data from {alert_periods[period]['diff']} seconds ago for index {index}", level="ERROR")
+                continue
+
+            comparisons[period] = {
+                index: {
+                    **{attr: now[index][attr] - then[index][attr] for attr in attrs},
+                    **{f"{attr}_per_s": (now[index][attr] - then[index][attr])/max(delta_t, 1) for attr in attrs},
+                    "bytes_per_doc": (now[index]["pri_store_size"] - then[index]["pri_store_size"])/max(now[index]["docs_count"] - then[index]["docs_count"], 1),
+                }
+            }
 
     return comparisons
 
@@ -268,32 +297,35 @@ def main():
     for index_name, index_config in indices_config.items():
         index_counts = fetch_index_counts(index_name, index_config)
         if not index_counts:
-            errors.append(f"Failed to get updated counts from index {index_name}")
+            errors.append(f"<li>Failed to get updated counts from index {index_name}</li>")
             continue
         indices_counts[index_name] = index_counts
+
+    counts_db = read_indices_counts_json(args.counts_file)
+    counts_comparisons = None
+    if counts_db is None:
+        errors.append(f"<li>Failed to open counts from {args.counts_file}</li>")
+    else:
+        counts_db[int(NOW.timestamp())] = indices_counts
+        if not write_indices_counts_json(counts_db, args.counts_file):
+            errors.append(f"<li>Failed to write updated counts to {args.counts_file}</li>")
+        counts_comparisons = compare_counts(counts_db, indices_config)
 
     if args.push_config:
         counts_config = read_config_file(args.push_config)
         indices_uploaded = upload_indices_counts(indices_counts, counts_config)
         for index in set(indices_config.keys()) - indices_uploaded:
-            errors.append(f"Failed to upload updated counts to Elasticsearch for index {index}")
-
-    counts_db = read_indices_counts_json(args.counts_file)
-    counts_comparisons = None
-    if counts_db is None:
-        errors.append(f"Failed to open counts from {args.counts_file}")
-    else:
-        counts_db[int(NOW.timestamp())] = indices_counts
-        if not write_indices_counts_json(counts_db, args.counts_file):
-            errors.append(f"Failed to write updated counts to {args.counts_file}")
-        counts_comparisons = compare_counts(counts_db)
+            errors.append(f"<li>Failed to upload updated counts to Elasticsearch for index {index}</li>")
 
     ingest_errors = False
-    for period, comparisons in counts_comparisons.items():
-        for index, counts in comparisons.items():
-            if counts["docs_count"] == 0:
-                ingest_errors = True
-                errors.insert(0, f"<li><strong>Index {index} has not any new docs ingested for the past {period}</strong></li>")
+    for index_name, index_config in indices_config.items():
+        if index_name not in counts_comparisons.get(index_name, {}):
+            errors.insert(0, f"<li><strong>Index {index_name} could not be compared between now and {int(index_config.get('alert_seconds', 3600)) // 60} minutes ago</strong></li>")
+            continue
+        counts = counts_comparisons[index_name][index_name]
+        if counts["docs_count"] == 0:
+            ingest_errors = True
+            errors.insert(0, f"<li><strong>Index {index_name} has not any new docs ingested for the past {int(index_config.get('alert_seconds', 3600)) // 60} minutes</strong></li>")
 
     if errors and args.error_to:
         subject = f"{len(errors)} ES ingest monitor errors at {datetime.now().strftime(r'%Y-%m-%d %H:%M')}"
@@ -317,7 +349,7 @@ def main():
     if counts_comparisons and args.to:
         subject = f"Elasticsearch ingest summary at {datetime.now().strftime(r'%Y-%m-%d %H:%M')}"
         html.append("<ul>")
-        for period in ["week", "day", "hour", "half hour"]:
+        for period in DEFAULT_COMPARISON_PERIODS:
             if period in counts_comparisons:
                 html.append(f"<li>In the past {period}:</li>")
                 html.append("<ul>")
