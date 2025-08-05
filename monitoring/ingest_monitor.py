@@ -362,7 +362,7 @@ def main():
             html="\n".join(html),
             from_addr=args.from_addr,
             reply_to_addr=args.reply_to,
-            to_addrs=args.error_to,
+            to_addrs=args.to,
             cc_addrs=[],
             bcc_addrs=[],
             smtp_server=args.smtp_server,
