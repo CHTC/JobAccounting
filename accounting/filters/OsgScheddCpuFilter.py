@@ -11,7 +11,8 @@ from accounting.functions import get_job_units, get_topology_project_data, get_t
 
 DEFAULT_COLUMNS = {
      5: "% Shadw w/o Start",
-    10: "Num Uniq Job Ids",
+     6: "% Shadw Input Fail",
+    15: "Num Uniq Job Ids",
     20: "All CPU Hours",
     30: "% Good CPU Hours",
     35: "Job Unit Hours",
@@ -100,6 +101,7 @@ DEFAULT_FILTER_ATTRS = [
     "ActivationDuration",
     "ActivationSetupDuration",
     "CondorVersion",
+    "NumVacatesByReason",
 ]
 
 
@@ -466,13 +468,13 @@ class OsgScheddCpuFilter(BaseFilter):
             columns[175] = "Most Used Schedd"
         if agg == "Projects":
             columns[4] = "PI Institution"
-            columns[6] = "Num Users"
-            columns[7] = "Num Site Instns"
-            columns[8] = "Num Sites"
+            columns[10] = "Num Users"
+            columns[11] = "Num Site Instns"
+            columns[12] = "Num Sites"
         if agg == "Institution":
-            columns[6] = "Num Sites"
-            columns[7] = "Num Users"
-            rm_columns = [5,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,390]
+            columns[10] = "Num Sites"
+            columns[11] = "Num Users"
+            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,390]
             [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
@@ -778,6 +780,25 @@ class OsgScheddCpuFilter(BaseFilter):
                 activation_durations.append(activation_duration)
                 setup_durations.append(setup_duration)
 
+        # NumVacatesByReason added in 24.11.1
+        num_vacates_shadows = 0
+        num_vacates_transferinputerror = 0
+        for (
+            condor_version,
+            num_vacates_by_reason,
+            num_shadow_starts_temp,
+        ) in zip(
+            data["CondorVersion"],
+            data["NumVacatesByReason"],
+            data["NumShadowStarts"],
+        ):
+            if tuple(int(x) for x in condor_version.split()[1].split(".")) < (24, 11, 1):
+                continue
+            if num_shadow_starts_temp is not None:
+                num_vacates_shadows += num_shadow_starts_temp
+            if num_vacates_by_reason is not None and "TransferInputError" in num_vacates_by_reason:
+                num_vacates_transferinputerror += num_vacates_by_reason["TransferInputError"]
+
         # Compute columns
         row["All CPU Hours"]    = sum(self.clean(total_cpu_time)) / 3600
         row["Good CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
@@ -831,6 +852,10 @@ class OsgScheddCpuFilter(BaseFilter):
         else:
             row["% Shadw w/o Start"] = 0
             row["Exec Atts / Shadw Start"] = 0
+        if num_vacates_shadows > 0:
+            row["% Shadw Input Fail"] = 100 * num_vacates_transferinputerror / num_vacates_shadows
+        else:
+            row["% Shadw Input Fail"] = 0
         if sum(data["_NumBadJobStarts"]) > 0:
             row["CPU Hours / Bad Exec Att"] = (sum(self.clean(badput_cpu_time)) / 3600) / sum(data["_NumBadJobStarts"])
         else:
