@@ -781,6 +781,7 @@ class OsgScheddCpuFilter(BaseFilter):
                 setup_durations.append(setup_duration)
 
         # NumVacatesByReason added in 24.11.1
+        num_vacates_by_reason_exists = False
         num_vacates_shadows = 0
         num_vacates_transferinputerror = 0
         for (
@@ -794,6 +795,7 @@ class OsgScheddCpuFilter(BaseFilter):
         ):
             if tuple(int(x) for x in condor_version.split()[1].split(".")) < (24, 11, 1):
                 continue
+            num_vacates_by_reason_exists = True
             if num_shadow_starts_temp is not None:
                 num_vacates_shadows += num_shadow_starts_temp
             if num_vacates_by_reason is not None and "TransferInputError" in num_vacates_by_reason:
@@ -854,8 +856,10 @@ class OsgScheddCpuFilter(BaseFilter):
             row["Exec Atts / Shadw Start"] = 0
         if num_vacates_shadows > 0:
             row["% Shadw Input Fail"] = 100 * num_vacates_transferinputerror / num_vacates_shadows
-        else:
+        elif num_vacates_by_reason_exists:
             row["% Shadw Input Fail"] = 0
+        else:
+            row["% Shadw Input Fail"] = "-"
         if sum(data["_NumBadJobStarts"]) > 0:
             row["CPU Hours / Bad Exec Att"] = (sum(self.clean(badput_cpu_time)) / 3600) / sum(data["_NumBadJobStarts"])
         else:
