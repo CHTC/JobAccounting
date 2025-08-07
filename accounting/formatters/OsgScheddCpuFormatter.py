@@ -76,13 +76,16 @@ class OsgScheddCpuFormatter(BaseFormatter):
     def rm_cols(self, data):
         cols = {
             "Good CPU Hours",
-            "Num Exec Atts",
-            "Num Shadw Starts",
+            "Num Job Starts",
+            "Num Shadow Starts",
             "Num Job Holds",
             "Num Rm'd Jobs",
             "Num Jobs w/>1 Exec Att",
             "Num Jobs w/1+ Holds",
             "Num Short Jobs",
+            "Num Shadow Starts Post 24.11.1",
+            "Num TransferInputError",
+            "Num Jobs Post 24.11.1",
         }
         return super().rm_cols(data, cols=cols)
 
