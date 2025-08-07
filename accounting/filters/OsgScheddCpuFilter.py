@@ -54,8 +54,6 @@ DEFAULT_COLUMNS = {
 
     300: "Good CPU Hours",
     305: "CPU Hours / Bad Exec Att",
-    310: "Num Exec Atts",
-    320: "Num Shadw Starts",
     325: "Num Job Holds",
     330: "Num Rm'd Jobs",
     340: "Num DAG Node Jobs",
@@ -74,6 +72,12 @@ DEFAULT_COLUMNS = {
     530: "Max Rqst Cpus",
     540: "Med Job Units",
     545: "Max Job Units",
+
+    600: "Num Job Starts",
+    610: "Num Shadow Starts",
+    620: "Num Shadow Starts Post 24.11.1",
+    630: "Num TransferInputError",
+    640: "Num Jobs Post 24.11.1",
 }
 
 
@@ -474,7 +478,7 @@ class OsgScheddCpuFilter(BaseFilter):
         if agg == "Institution":
             columns[10] = "Num Sites"
             columns[11] = "Num Users"
-            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,390]
+            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,325,330,340,350,355,390,600,610,620,630,640]
             [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
@@ -781,7 +785,7 @@ class OsgScheddCpuFilter(BaseFilter):
                 setup_durations.append(setup_duration)
 
         # NumVacatesByReason added in 24.11.1
-        num_vacates_by_reason_exists = False
+        num_vacates_by_reason_exists = 0
         num_vacates_shadows = 0
         num_vacates_transferinputerror = 0
         for (
@@ -795,7 +799,7 @@ class OsgScheddCpuFilter(BaseFilter):
         ):
             if tuple(int(x) for x in condor_version.split()[1].split(".")) < (24, 11, 1):
                 continue
-            num_vacates_by_reason_exists = True
+            num_vacates_by_reason_exists += 1
             if num_shadow_starts_temp is not None:
                 num_vacates_shadows += num_shadow_starts_temp
             if num_vacates_by_reason is not None and "TransferInputError" in num_vacates_by_reason:
@@ -819,8 +823,8 @@ class OsgScheddCpuFilter(BaseFilter):
         row["Max Rqst Disk GB"] = max(self.clean(data["RequestDisk"], allow_empty_list=False)) / (1000*1000)
         row["Max Used Disk GB"] = max(self.clean(data["DiskUsage"], allow_empty_list=False)) / (1000*1000)
         row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
-        row["Num Exec Atts"]    = sum(self.clean(num_exec_attempts))
-        row["Num Shadw Starts"] = sum(self.clean(num_shadow_starts))
+        row["Num Job Starts"]    = sum(self.clean(num_exec_attempts))
+        row["Num Shadow Starts"] = sum(self.clean(num_shadow_starts))
         row["Num Ckpt Able Jobs"]  = sum(data["_NumCkptJobs"])
         row["Num S'ty Jobs"]       = len(self.clean(data["SingularityImage"]))
 
@@ -830,7 +834,7 @@ class OsgScheddCpuFilter(BaseFilter):
         else:
             row["% Good CPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
-            row["Shadw Starts / Job Id"] = row["Num Shadw Starts"] / row["Num Uniq Job Ids"]
+            row["Shadw Starts / Job Id"] = row["Num Shadow Starts"] / row["Num Uniq Job Ids"]
             row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
@@ -848,15 +852,15 @@ class OsgScheddCpuFilter(BaseFilter):
             row["% Jobs w/1+ Holds"] = 0
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
-        if row["Num Shadw Starts"] > 0:
-            row["% Shadw w/o Start"] = 100 * max(row["Num Shadw Starts"] - row["Num Exec Atts"], 0) / row["Num Shadw Starts"]
-            row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
+        if row["Num Shadow Starts"] > 0:
+            row["% Shadw w/o Start"] = 100 * max(row["Num Shadow Starts"] - row["Num Job Starts"], 0) / row["Num Shadow Starts"]
+            row["Exec Atts / Shadw Start"] = row["Num Job Starts"] / row["Num Shadow Starts"]
         else:
             row["% Shadw w/o Start"] = 0
             row["Exec Atts / Shadw Start"] = 0
         if num_vacates_shadows > 0:
             row["% Shadw Input Fail"] = 100 * num_vacates_transferinputerror / num_vacates_shadows
-        elif num_vacates_by_reason_exists:
+        elif num_vacates_by_reason_exists > 0:
             row["% Shadw Input Fail"] = 0
         else:
             row["% Shadw Input Fail"] = "-"
@@ -864,6 +868,10 @@ class OsgScheddCpuFilter(BaseFilter):
             row["CPU Hours / Bad Exec Att"] = (sum(self.clean(badput_cpu_time)) / 3600) / sum(data["_NumBadJobStarts"])
         else:
             row["CPU Hours / Bad Exec Att"] = 0
+
+        row["Num Shadow Starts Post 24.11.1"] = num_vacates_shadows
+        row["Num TransferInputError"] = num_vacates_transferinputerror
+        row["Num Jobs Post 24.11.1"] = num_vacates_by_reason_exists
 
         # File transfer stats
         total_files = 0
