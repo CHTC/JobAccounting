@@ -478,7 +478,7 @@ class OsgScheddCpuFilter(BaseFilter):
         if agg == "Institution":
             columns[10] = "Num Sites"
             columns[11] = "Num Users"
-            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,390]
+            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,325,330,340,350,355,390,600,610,620,630,640]
             [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
