@@ -286,21 +286,32 @@ def get_topology_resource_data(cache_file=Path("./topology_resource_data.pickle"
     return resources_data
 
 
-def get_ospool_aps() -> set:
+def get_ospool_aps(include_jupyter_aps=True, pickled_ap_collector_hosts_cache=None) -> set:
+    cached_aps = set()
+    if pickled_ap_collector_hosts_cache is not None:
+        with Path(pickled_ap_collector_hosts_cache).open("rb") as f:
+            ap_collector_hosts_cache = pickle.load(f)
+            for ap, collector_hosts in ap_collector_hosts_cache.items():
+                if not include_jupyter_aps and (ap.lower().startswith("jupyter-notebook-") or ap.lower().startswith("jupyterlab-")):
+                    continue
+                if len(set(collector_hosts) & OSPOOL_COLLECTORS) > 0:
+                    cached_aps.add(ap)
     current_ospool_aps = set()
     if htcondor is None:
         print("Could not import htcondor, not querying APs")
-        return OSPOOL_APS
-    for collector_host in OSPOOL_COLLECTORS:
-        try:
-            collector = htcondor.Collector(collector_host)
-            aps = collector.query(htcondor.AdTypes.Schedd, projection=["Machine", "CollectorHost"])
-        except Exception:
-            continue
-        for ap in aps:
-            if set(re.split(r"[\s,]+", ap["CollectorHost"])) & OSPOOL_COLLECTORS:
-                current_ospool_aps.add(ap["Machine"])
-    return current_ospool_aps | OSPOOL_APS
+    else:
+        for collector_host in OSPOOL_COLLECTORS:
+            try:
+                collector = htcondor.Collector(collector_host)
+                aps = collector.query(htcondor.AdTypes.Schedd, projection=["Machine", "CollectorHost"])
+            except Exception:
+                continue
+            for ap in aps:
+                if not include_jupyter_aps and (ap["Machine"].lower().startswith("jupyter-notebook-") or ap["Machine"].lower().startswith("jupyterlab-")):
+                    continue
+                if set(re.split(r"[\s,]+", ap["CollectorHost"])) & OSPOOL_COLLECTORS:
+                    current_ospool_aps.add(ap["Machine"])
+    return current_ospool_aps | cached_aps | OSPOOL_APS
 
 
 def _smtp_mail(msg, recipient, smtp_server="", smtp_username=None, smtp_password=""):
