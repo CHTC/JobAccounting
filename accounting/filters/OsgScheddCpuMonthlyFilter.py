@@ -2,12 +2,9 @@
 import re
 import htcondor
 import pickle
-import statistics as stats
 from pathlib import Path
 from collections import defaultdict
 from operator import itemgetter
-from elasticsearch import Elasticsearch
-import elasticsearch.helpers
 from functools import lru_cache
 from .BaseFilter import BaseFilter
 from accounting.functions import get_job_units, get_topology_project_data, get_topology_resource_data, get_institution_database
@@ -15,7 +12,9 @@ from accounting.functions import get_job_units, get_topology_project_data, get_t
 MAX_INT = 2**62
 
 DEFAULT_COLUMNS = {
-    10: "Num Uniq Job Ids",
+     5: "% Shadw w/o Start",
+     6: "% Shadw Input Fail",
+    15: "Num Uniq Job Ids",
     20: "All CPU Hours",
     30: "% Good CPU Hours",
     35: "Job Unit Hours",
@@ -49,8 +48,6 @@ DEFAULT_COLUMNS = {
 
     300: "Good CPU Hours",
     305: "CPU Hours / Bad Exec Att",
-    310: "Num Exec Atts",
-    320: "Num Shadw Starts",
     325: "Num Job Holds",
     330: "Num Rm'd Jobs",
     340: "Num DAG Node Jobs",
@@ -67,6 +64,12 @@ DEFAULT_COLUMNS = {
     527: "Max Used Disk GB",
     530: "Max Rqst Cpus",
     545: "Max Job Units",
+
+    600: "Num Job Starts",
+    610: "Num Shadow Starts",
+    620: "Num Shadow Starts Post 24.11.1",
+    630: "Num TransferInputError",
+    640: "Num Jobs Post 24.11.1",
 }
 
 
@@ -212,6 +215,9 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
         )
         long_job_wallclock_time = int(is_long) * i.get("LastRemoteWallClockTime", i.get("CommittedTime", 60))
+        has_num_vacates_by_reason = False
+        if tuple(int(x) for x in i.get("CondorVersion", "_ 0.0.0").split()[1].split(".")) >= (24, 11, 1):
+            has_num_vacates_by_reason = True
 
         sum_cols = {}
         sum_cols["Jobs"] = 1
@@ -246,6 +252,10 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             sum_cols["TotalBytes"] = input_bytes + output_bytes
             sum_cols["OSDFFiles"] = osdf_files
             sum_cols["OSDFBytes"] = osdf_bytes
+
+        sum_cols["NumJobsWithVacatesByReason"] = int(has_num_vacates_by_reason)
+        sum_cols["NumShadowsWithVacatesByReason"] = int(has_num_vacates_by_reason) * i.get("NumShadowStarts", 0)
+        sum_cols["NumVacatesTransferInputError"] = i.get("NumVacatesByReason", {}).get("TransferInputError", 0)
 
         max_cols = {}
         max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
@@ -400,18 +410,18 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         # Add Project and Schedd columns to the Users table
         columns = DEFAULT_COLUMNS.copy()
         if agg == "Users":
-            columns[5] = "Most Used Project"
+            columns[4] = "Most Used Project"
             columns[175] = "Most Used Schedd"
         if agg == "Projects":
             columns[4] = "PI Institution"
-            columns[5] = "Num Users"
-            columns[6] = "Num Site Instns"
-            columns[7] = "Num Sites"
+            columns[10] = "Num Users"
+            columns[11] = "Num Site Instns"
+            columns[12] = "Num Sites"
         if agg == "Institution":
-            columns[4] = "Num Sites"
-            columns[5] = "Num Users"
-            rm_columns = [30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,310,320,325,330,340,350,355,390]
-            [columns.pop(key) for key in rm_columns if key in columns]
+            columns[10] = "Num Sites"
+            columns[11] = "Num Users"
+            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,325,330,340,350,355,390,600,610,620,630,640]
+            _ = [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
     def compute_institution_custom_columns(self, data, agg, agg_name):
@@ -481,8 +491,8 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         row["Max Used Disk GB"] = data["MaxDiskUsage"] / (1024*1024)
         row["Max Rqst Cpus"]    = data["MaxRequestCpus"]
         row["Max Job Units"]    = data["MaxJobUnits"]
-        row["Num Exec Atts"]    = data["NumJobStarts"]
-        row["Num Shadw Starts"] = data["NumShadowStarts"]
+        row["Num Job Starts"]    = data["NumJobStarts"]
+        row["Num Shadow Starts"] = data["NumShadowStarts"]
         row["Num Ckpt Able Jobs"]  = data["CheckpointableJobs"]
         row["Num S'ty Jobs"]       = data["SingularityJobs"]
 
@@ -511,7 +521,7 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         else:
             row["% Good CPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
-            row["Shadw Starts / Job Id"] = row["Num Shadw Starts"] / row["Num Uniq Job Ids"]
+            row["Shadw Starts / Job Id"] = row["Num Shadow Starts"] / row["Num Uniq Job Ids"]
             row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
@@ -529,14 +539,26 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             row["% Jobs w/1+ Holds"] = 0
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
-        if row["Num Shadw Starts"] > 0:
-            row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
+        if row["Num Shadow Starts"] > 0:
+            row["% Shadw w/o Start"] = 100 * max(row["Num Shadow Starts"] - row["Num Job Starts"], 0) / row["Num Shadow Starts"]
+            row["Exec Atts / Shadw Start"] = row["Num Job Starts"] / row["Num Shadow Starts"]
         else:
+            row["% Shadw w/o Start"] = 0
             row["Exec Atts / Shadw Start"] = 0
+        if data["NumShadowsWithVacatesByReason"] > 0:
+            row["% Shadw Input Fail"] = 100 * data["NumVacatesTransferInputError"] / data["NumShadowsWithVacatesByReason"]
+        elif data["NumJobsWithVacatesByReason"] > 0:
+            row["% Shadw Input Fail"] = 0
+        else:
+            row["% Shadw Input Fail"] = "-"
         if data["NumBadJobStarts"] > 0:
             row["CPU Hours / Bad Exec Att"] = (data["BadCpuTime"] / data["NumBadJobStarts"]) / 3600
         else:
             row["CPU Hours / Bad Exec Att"] = 0
+
+        row["Num Shadow Starts Post 24.11.1"] = data["NumShadowsWithVacatesByReason"]
+        row["Num TransferInputError"] = data["NumVacatesTransferInputError"]
+        row["Num Jobs Post 24.11.1"] = data["NumJobsWithVacatesByReason"]
 
         if data["LongJobs"] > 0:
             row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
