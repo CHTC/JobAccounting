@@ -758,6 +758,8 @@ if __name__ == "__main__":
         ("404 Pct Jobs Interrupted", "pct_jobs_affected_404", ".1%"),
         ("Total Failed Attempts", "all_failed_attempts", ",d"),
         ("Total Jobs Interrupted", "final_failed_attempts", ",d"),
+        ("Non-404 Jobs Interrupted", "final_notfilenotfound_failed_attempts", ",d"),
+        ("404 Jobs Interrupted", "final_filenotfound_failed_attempts", ",d"),
         ("Endpoint Hostname", "endpoint", "s"),
         ("Endpoint Type", "endpoint_type", "s"),
     ]
@@ -808,6 +810,8 @@ if __name__ == "__main__":
         ("404 Pct Jobs Interrupted", "pct_jobs_affected_404", ".1%"),
         ("Total Failed Attempts", "all_failed_attempts", ",d"),
         ("Total Jobs Interrupted", "final_failed_attempts", ",d"),
+        ("Non-404 Jobs Interrupted", "final_notfilenotfound_failed_attempts", ",d"),
+        ("404 Jobs Interrupted", "final_filenotfound_failed_attempts", ",d"),
     ]
     columns = [{
             "name": name,
@@ -1035,11 +1039,11 @@ if __name__ == "__main__":
         "Pct Uniq Jobs Interrupted": "Uniq Jobs Interrupted / Total Uniq Jobs (as a percentage)",
         "Non-404 Failed Attempts": "Number of transfer attempts that failed due to an error other than FileNotFound",
         "Non-404 Pct Attempts Failed": "Non-404 Failed Attempts / Total Attempts (as a percentage)",
-        "Non-404 Jobs Interrupted": "(not displayed) Number of final transfer attempts that failed due to an error other than FileNotFound",
+        "Non-404 Jobs Interrupted": "Number of final transfer attempts that failed due to an error other than FileNotFound",
         "Non-404 Pct Jobs Interrupted": "Non-404 Jobs Interrupted / Total Jobs Interrupted (as a percentage)",
         "404 Failed Attempts": "Number of transfer attempts that failed due to FileNotFound",
         "404 Pct Attempts Failed": "404 Failed Attempts / Total Attempts (as a percentage)",
-        "404 Jobs Interrupted": "(not displayed) Number of final transfer attempts that failed due to FileNotFound",
+        "404 Jobs Interrupted": "Number of final transfer attempts that failed due to FileNotFound",
         "404 Pct Jobs Interrupted": "404 Jobs Interrupted / Total Jobs Interrupted (as a percentage)",
     }
     html.append("<ul>")
