@@ -428,15 +428,20 @@ if __name__ == "__main__":
     no_endpoint_filter = ~Q("exists", field="Endpoint")
 
     base_endpoint_query = base_endpoint_query.query(osdf_filter)
-    success_query = base_endpoint_query.query(success_filter)
 
-    final_attempt_failure_query = base_endpoint_query.query(final_attempt_failure_filter)
+    success_query = base_endpoint_query.query(success_filter)
 
     all_attempt_failure_query = base_endpoint_query.query(all_attempt_failure_filter)
 
-    filenotfound_attempt_failure_query = base_endpoint_query.query(filenotfound_attempt_failure_filter)
+    final_attempt_failure_query = base_endpoint_query.query(final_attempt_failure_filter)
 
-    final_filenotfound_attempt_failure_query = filenotfound_attempt_failure_query.query(final_attempt_failure_filter)
+    filenotfound_attempt_failure_query = all_attempt_failure_query.query(filenotfound_attempt_failure_filter)
+
+    final_filenotfound_attempt_failure_query = final_attempt_failure_query.query(filenotfound_attempt_failure_filter)
+
+    notfilenotfound_attempt_failure_query = all_attempt_failure_query.query(~filenotfound_attempt_failure_filter)
+
+    final_notfilenotfound_attempt_failure_query = final_attempt_failure_query.query(~filenotfound_attempt_failure_filter)
 
     director_failure_query = base_director_query.query(no_endpoint_filter)
 
@@ -464,6 +469,14 @@ if __name__ == "__main__":
     final_filenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     final_filenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
+    notfilenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
+    notfilenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
+    notfilenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
+
+    final_notfilenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
+    final_notfilenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
+    final_notfilenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
+
     base_director_query.aggs.bucket("transfer_type", transfer_type_agg)
     base_director_query.aggs.bucket("resource_name", resource_name_agg)
     base_director_query.aggs.metric("unique_jobs", num_jobs_agg)
@@ -490,6 +503,12 @@ if __name__ == "__main__":
         time.sleep(1)
 
         final_filenotfound_failed_attempts = final_filenotfound_attempt_failure_query.execute()
+        time.sleep(1)
+
+        notfilenotfound_failed_attempts = notfilenotfound_attempt_failure_query.execute()
+        time.sleep(1)
+
+        final_notfilenotfound_failed_attempts = final_notfilenotfound_attempt_failure_query.execute()
         time.sleep(1)
 
         director_all_attempts = base_director_query.execute()
@@ -521,6 +540,12 @@ if __name__ == "__main__":
 
     final_filenotfound_failed_transfer_type_data = convert_buckets_to_dict(final_filenotfound_failed_attempts.aggregations.transfer_type.buckets)
     final_filenotfound_failed_resource_name_data = convert_buckets_to_dict(final_filenotfound_failed_attempts.aggregations.resource_name.buckets)
+
+    notfilenotfound_failed_transfer_type_data = convert_buckets_to_dict(notfilenotfound_failed_attempts.aggregations.transfer_type.buckets)
+    notfilenotfound_failed_resource_name_data = convert_buckets_to_dict(notfilenotfound_failed_attempts.aggregations.resource_name.buckets)
+
+    final_notfilenotfound_failed_transfer_type_data = convert_buckets_to_dict(final_notfilenotfound_failed_attempts.aggregations.transfer_type.buckets)
+    final_notfilenotfound_failed_resource_name_data = convert_buckets_to_dict(final_notfilenotfound_failed_attempts.aggregations.resource_name.buckets)
 
     director_all_transfer_type_data = convert_buckets_to_dict(director_all_attempts.aggregations.transfer_type.buckets)
     director_all_resource_name_data = convert_buckets_to_dict(director_all_attempts.aggregations.resource_name.buckets)
@@ -556,6 +581,8 @@ if __name__ == "__main__":
                 "all_failed_attempts": all_failed_transfer_type_data,
                 "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
                 "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
+                "notfilenotfound_failed_attempts": notfilenotfound_failed_transfer_type_data,
+                "final_notfilenotfound_failed_attempts": final_notfilenotfound_failed_transfer_type_data,
             }.items():
                 try:
                     row[attempt_type] = attempt_data[transfer_type]["endpoint"][endpoint]["value"]
@@ -563,11 +590,13 @@ if __name__ == "__main__":
                 except KeyError:
                     row[attempt_type] = 0
                     row[f"{attempt_type}_jobs"] = 0
+            row["total_final_attempts"] = row["final_failed_attempts"] + row["success_attempts"]
             row["pct_failed_attempts"] = row["all_failed_attempts"] / max(row["total_attempts"], row["all_failed_attempts"], 1)
-            row["pct_failed_attempts_404"] = row["filenotfound_failed_attempts"] / max(row["all_failed_attempts"], 1)
-            row["failed_attempts_per_job"] = row["all_failed_attempts"] / max(row["total_attempts_jobs"], row["all_failed_attempts"], 1)
-            row["pct_jobs_affected"] = row["final_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["final_failed_attempts_jobs"], 1)
-            row["pct_jobs_affected_404"] = row["final_filenotfound_failed_attempts_jobs"] / max(row["final_failed_attempts_jobs"], 1)
+            row["pct_failed_attempts_not404"] = row["notfilenotfound_failed_attempts"] / max(row["total_attempts"], row["notfilenotfound_failed_attempts"], 1)
+            row["pct_failed_attempts_404"] = row["filenotfound_failed_attempts"] / max(row["total_attempts"], row["filenotfound_failed_attempts"], 1)
+            row["pct_jobs_affected_not404"] = row["final_notfilenotfound_failed_attempts"] / max(row["total_final_attempts"], row["final_notfilenotfound_failed_attempts"], 1)
+            row["pct_jobs_affected_404"] = row["final_filenotfound_failed_attempts"] / max(row["total_final_attempts"], row["final_filenotfound_failed_attempts"], 1)
+            row["pct_uniq_jobs_affected"] = row["all_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["all_failed_attempts_jobs"], 1)
             endpoint_data[transfer_type].append(row)
 
     endpoint_data_totals = {}
@@ -585,6 +614,8 @@ if __name__ == "__main__":
             "all_failed_attempts": all_failed_transfer_type_data,
             "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
             "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
+            "notfilenotfound_failed_attempts": notfilenotfound_failed_transfer_type_data,
+            "final_notfilenotfound_failed_attempts": final_notfilenotfound_failed_transfer_type_data,
         }.items():
             try:
                 endpoint_data_totals[transfer_type][attempt_type] = attempt_data[transfer_type]["value"]
@@ -592,11 +623,13 @@ if __name__ == "__main__":
             except KeyError:
                 endpoint_data_totals[transfer_type][attempt_type] = 0
                 endpoint_data_totals[transfer_type][f"{attempt_type}_jobs"] = 0
+        endpoint_data_totals[transfer_type]["total_final_attempts"] = endpoint_data_totals[transfer_type]["final_failed_attempts"] + endpoint_data_totals[transfer_type]["success_attempts"]
         endpoint_data_totals[transfer_type]["pct_failed_attempts"] = endpoint_data_totals[transfer_type]["all_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts"], endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
-        endpoint_data_totals[transfer_type]["pct_failed_attempts_404"] = endpoint_data_totals[transfer_type]["filenotfound_failed_attempts"] / max(endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
-        endpoint_data_totals[transfer_type]["failed_attempts_per_job"] = endpoint_data_totals[transfer_type]["all_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts_jobs"], endpoint_data_totals[transfer_type]["all_failed_attempts"], 1)
-        endpoint_data_totals[transfer_type]["pct_jobs_affected"] = endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"] / max(endpoint_data_totals[transfer_type]["total_attempts_jobs"], endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
-        endpoint_data_totals[transfer_type]["pct_jobs_affected_404"] = endpoint_data_totals[transfer_type]["final_filenotfound_failed_attempts_jobs"] / max(endpoint_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
+        endpoint_data_totals[transfer_type]["pct_failed_attempts_not404"] = endpoint_data_totals[transfer_type]["notfilenotfound_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts"], endpoint_data_totals[transfer_type]["notfilenotfound_failed_attempts"], 1)
+        endpoint_data_totals[transfer_type]["pct_failed_attempts_404"] = endpoint_data_totals[transfer_type]["filenotfound_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_attempts"], endpoint_data_totals[transfer_type]["filenotfound_failed_attempts"], 1)
+        endpoint_data_totals[transfer_type]["pct_jobs_affected_not404"] = endpoint_data_totals[transfer_type]["final_notfilenotfound_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_final_attempts"], endpoint_data_totals[transfer_type]["final_notfilenotfound_failed_attempts"], 1)
+        endpoint_data_totals[transfer_type]["pct_jobs_affected_404"] = endpoint_data_totals[transfer_type]["final_filenotfound_failed_attempts"] / max(endpoint_data_totals[transfer_type]["total_final_attempts"], endpoint_data_totals[transfer_type]["final_filenotfound_failed_attempts"], 1)
+        endpoint_data_totals[transfer_type]["pct_uniq_jobs_affected"] = endpoint_data_totals[transfer_type]["all_failed_attempts_jobs"] / max(endpoint_data_totals[transfer_type]["total_attempts_jobs"], endpoint_data_totals[transfer_type]["all_failed_attempts_jobs"], 1)
         endpoint_data[transfer_type].sort(key=itemgetter("total_attempts"), reverse=True)
         endpoint_data[transfer_type].insert(0, endpoint_data_totals[transfer_type])
 
@@ -620,6 +653,8 @@ if __name__ == "__main__":
                 "all_failed_attempts": all_failed_transfer_type_data,
                 "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
                 "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
+                "notfilenotfound_failed_attempts": notfilenotfound_failed_transfer_type_data,
+                "final_notfilenotfound_failed_attempts": final_notfilenotfound_failed_transfer_type_data,
                 "director_attempts": director_all_transfer_type_data,
                 "director_failed_attempts": director_failed_transfer_type_data,
             }.items():
@@ -629,11 +664,13 @@ if __name__ == "__main__":
                 except KeyError:
                     row[attempt_type] = 0
                     row[f"{attempt_type}_jobs"] = 0
+            row["total_final_attempts"] = row["final_failed_attempts"] + row["success_attempts"]
             row["pct_failed_attempts"] = row["all_failed_attempts"] / max(row["total_attempts"], row["all_failed_attempts"], 1)
-            row["pct_failed_attempts_404"] = row["filenotfound_failed_attempts"] / max(row["all_failed_attempts"], 1)
-            row["failed_attempts_per_job"] = row["all_failed_attempts"] / max(row["total_attempts_jobs"], row["all_failed_attempts"], 1)
-            row["pct_jobs_affected"] = row["final_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["final_failed_attempts_jobs"], 1)
-            row["pct_jobs_affected_404"] = row["final_filenotfound_failed_attempts_jobs"] / max(row["final_failed_attempts_jobs"], 1)
+            row["pct_failed_attempts_not404"] = row["notfilenotfound_failed_attempts"] / max(row["total_attempts"], row["notfilenotfound_failed_attempts"], 1)
+            row["pct_failed_attempts_404"] = row["filenotfound_failed_attempts"] / max(row["total_attempts"], row["filenotfound_failed_attempts"], 1)
+            row["pct_jobs_affected_not404"] = row["final_notfilenotfound_failed_attempts"] / max(row["total_final_attempts"], row["final_notfilenotfound_failed_attempts"], 1)
+            row["pct_jobs_affected_404"] = row["final_filenotfound_failed_attempts"] / max(row["total_final_attempts"], row["final_filenotfound_failed_attempts"], 1)
+            row["pct_uniq_jobs_affected"] = row["all_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["all_failed_attempts_jobs"], 1)
             row["pct_failed_director_attempts"] = row["director_failed_attempts"] / max(row["director_attempts"], row["director_failed_attempts"], 1)
             row["failed_director_attempts_per_job"] = row["director_failed_attempts"] / max(row["director_attempts_jobs"], row["director_failed_attempts"], 1)
             row["pct_jobs_affected_director"] = row["director_failed_attempts_jobs"] / max(row["director_attempts_jobs"], row["director_failed_attempts_jobs"], 1)
@@ -652,6 +689,8 @@ if __name__ == "__main__":
             "all_failed_attempts": all_failed_transfer_type_data,
             "filenotfound_failed_attempts": filenotfound_failed_transfer_type_data,
             "final_filenotfound_failed_attempts": final_filenotfound_failed_transfer_type_data,
+            "notfilenotfound_failed_attempts": notfilenotfound_failed_transfer_type_data,
+            "final_notfilenotfound_failed_attempts": final_notfilenotfound_failed_transfer_type_data,
             "director_attempts": director_all_transfer_type_data,
             "director_failed_attempts": director_failed_transfer_type_data,
         }.items():
@@ -661,74 +700,92 @@ if __name__ == "__main__":
             except KeyError:
                 resource_name_data_totals[transfer_type][attempt_type] = 0
                 resource_name_data_totals[transfer_type][f"{attempt_type}_jobs"] = 0
+        resource_name_data_totals[transfer_type]["total_final_attempts"] = resource_name_data_totals[transfer_type]["final_failed_attempts"] + resource_name_data_totals[transfer_type]["success_attempts"]
         resource_name_data_totals[transfer_type]["pct_failed_attempts"] = resource_name_data_totals[transfer_type]["all_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts"], resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
-        resource_name_data_totals[transfer_type]["pct_failed_attempts_404"] = resource_name_data_totals[transfer_type]["filenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
-        resource_name_data_totals[transfer_type]["failed_attempts_per_job"] = resource_name_data_totals[transfer_type]["all_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
-        resource_name_data_totals[transfer_type]["pct_jobs_affected"] = resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
-        resource_name_data_totals[transfer_type]["pct_jobs_affected_404"] = resource_name_data_totals[transfer_type]["final_filenotfound_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["final_failed_attempts_jobs"], 1)
+        resource_name_data_totals[transfer_type]["pct_failed_attempts_not404"] = resource_name_data_totals[transfer_type]["notfilenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts"], resource_name_data_totals[transfer_type]["notfilenotfound_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_failed_attempts_404"] = resource_name_data_totals[transfer_type]["filenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts"], resource_name_data_totals[transfer_type]["filenotfound_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_jobs_affected_not404"] = resource_name_data_totals[transfer_type]["final_notfilenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_final_attempts"], resource_name_data_totals[transfer_type]["final_notfilenotfound_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_jobs_affected_404"] = resource_name_data_totals[transfer_type]["final_filenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_final_attempts"], resource_name_data_totals[transfer_type]["final_filenotfound_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_uniq_jobs_affected"] = resource_name_data_totals[transfer_type]["all_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["all_failed_attempts_jobs"], 1)
         resource_name_data_totals[transfer_type]["pct_failed_director_attempts"] = resource_name_data_totals[transfer_type]["director_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_attempts"], resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["failed_director_attempts_per_job"] = resource_name_data_totals[transfer_type]["director_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_attempts_jobs"], resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["pct_jobs_affected_director"] = resource_name_data_totals[transfer_type]["director_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["director_attempts_jobs"], resource_name_data_totals[transfer_type]["director_failed_attempts_jobs"], 1)
-        resource_name_data[transfer_type].sort(key=itemgetter("pct_failed_attempts"), reverse=True)
+        resource_name_data[transfer_type].sort(key=itemgetter("pct_failed_attempts_not404"), reverse=True)
         resource_name_data[transfer_type].insert(0, resource_name_data_totals[transfer_type])
 
     warn_threshold = 0.05
     err_threshold = 0.15
 
-    css = """
-    h1 {text-align: center;}
-    table {border-collapse: collapse;}
-    th, td {border: 1px solid black;}
-    td.text {text-align: left;}
-    td.num {text-align: right;}
-    tr.warn {background-color: #ffc;}
-    tr.err {background-color: #fcc;}
-"""
+    styles = {
+        "h1": "text-align: center",
+        "table": "border-collapse: collapse",
+        "td": "border: 1px solid black",
+        "td.text": "text-align: left",
+        "td.numeric": "text-align: right",
+        "tr.warn": "background-color: #ffc",
+        "tr.err": "background-color: #fcc",
+    }
+
     html = ["<html>"]
 
     html.append("<head>")
-    html.append(f"<style>{css}</style>")
     html.append("</head>")
 
     html.append("<body>")
 
-    html.append(f"<h1>OSPool OSDF report from {args.start} to {args.end}</h1>")
+    html.append(f"<h1 style={styles['h1']}>OSPool OSDF report from {args.start} to {args.end}</h1>")
 
-    html.append(f'<span style="color: yellow">Yellow</span> rows where Percent Failed Attempts are above {warn_threshold:.0%}</span><br>')
-    html.append(f'<span style="color: red">Red</span> rows where Percent Failed Attempts are above {err_threshold:.0%}</span><br>')
+    html.append(f'<span style="color: yellow">Yellow</span> rows where Percent Failed Attempts (Non-404 for input transfer) are above {warn_threshold:.0%}</span><br>')
+    html.append(f'<span style="color: red">Red</span> rows where Percent Failed Attempts (Non-404 for input transfer) are above {err_threshold:.0%}</span><br>')
     html.append('<span style="font-weight: bold">*Not currently found</span> means that the endpoint was not reporting to the director at the time the report was generated.')
 
     ### ENDPOINT DOWNLOAD TABLE
 
     html.append("<h2>Per OSDF endpoint download (i.e. input transfer) statistics</h2>")
 
-    cols = ["endpoint_name",    "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "filenotfound_failed_attempts", "pct_failed_attempts", "pct_failed_attempts_404", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "pct_jobs_affected_404",    "endpoint",          "endpoint_type"]
-    hdrs = ["Endpoint Name",    "Endpoint Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "404'd Attempts",               "Pct Attempts Failed", "Pct Failed Attempts 404", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Pct Interrupted Jobs 404", "Endpoint Hostname", "Endpoint Type"]
-    fmts = ["s",                "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ",d",                           ".1%",                 ".1%",                     ",.2f",                    ",d",                          ",d",                         ".1%",                  ".1%",                      "s",                 "s"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+    columns = [
+        ("Endpoint Name", "endpoint_name", "s"),
+        ("Endpoint Institution", "endpoint_institution", "s"),
+        ("Total Attempts", "total_attempts", ",d"),
+        ("Total Uniq Jobs", "total_attempts_jobs", ",d"),
+        ("Successful Transfers", "success_attempts", ",d"),
+        ("Uniq Jobs w/1+ Success", "success_attempts_jobs", ",d"),
+        ("Non-404 Failed Attempts", "notfilenotfound_failed_attempts", ",d"),
+        ("Non-404 Pct Attempts Failed", "pct_failed_attempts_not404", ".1%"),
+        ("Non-404 Pct Jobs Interrupted", "pct_jobs_affected_not404", ".1%"),
+        ("404 Failed Attempts", "filenotfound_failed_attempts", ",d"),
+        ("404 Pct Attempts Failed", "pct_failed_attempts_404", ".1%"),
+        ("404 Pct Jobs Interrupted", "pct_jobs_affected_404", ".1%"),
+        ("Total Failed Attempts", "all_failed_attempts", ",d"),
+        ("Total Jobs Interrupted", "final_failed_attempts", ",d"),
+        ("Endpoint Hostname", "endpoint", "s"),
+        ("Endpoint Type", "endpoint_type", "s"),
+    ]
+    columns = [{
+            "name": name,
+            "key": key,
+            "format": fmt,
+            "style": "td.text" if fmt == "s" else "td.numeric",
+        } for name, key, fmt in columns]
 
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
-
-    html.append('<table>')
+    html.append(f'''<table style="{styles['table']}">''')
 
     html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    for col in columns:
+        html.append(f'''\t\t<th style="{styles["td"]}">{col['name']}</th>''')
     html.append("\t</tr>")
     for row in endpoint_data["download"]:
-        row_class = ""
-        if row["pct_failed_attempts"] > err_threshold:
-            row_class = "err"
-        elif row["pct_failed_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
+        row_style = ""
+        if row["pct_failed_attempts_not404"] > err_threshold:
+            row_style = styles["tr.err"]
+        elif row["pct_failed_attempts_not404"] > warn_threshold:
+            row_style = styles["tr.warn"]
+        html.append(f'\t<tr style="{row_style}">')
+        for col in columns:
             try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+                html.append(f'''\t\t<td style="{styles['td']}; {styles[col["style"]]}">{row[col["key"]]:{col["format"]}}</td>''')
             except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
+                html.append(f'''\t\t<td style="{styles['td']}">{row[col["key"]]}</td>''')
         html.append("\t</tr>")
     html.append("</table>")
 
@@ -736,33 +793,47 @@ if __name__ == "__main__":
 
     html.append("<h2><strong>OSDF cache/origin</strong> per OSPool resource download (i.e. input transfer) statistics</h2>")
 
-    cols = ["resource_name", "resource_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "filenotfound_failed_attempts", "pct_failed_attempts", "pct_failed_attempts_404", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "pct_jobs_affected_404"]
-    hdrs = ["Resource Name", "Resource Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "404'd Attempts",               "Pct Attempts Failed", "Pct Failed Attempts 404", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Pct Interrupted Jobs 404"]
-    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ",d",                           ".1%",                 ".1%",                     ",.2f",                    ",d",                          ",d",                         ".1%",                  ".1%"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+    columns = [
+        ("Resource Name", "resource_name", "s"),
+        ("Resource Institution", "resource_institution", "s"),
+        ("Total Attempts", "total_attempts", ",d"),
+        ("Total Uniq Jobs", "total_attempts_jobs", ",d"),
+        ("Successful Transfers", "success_attempts", ",d"),
+        ("Uniq Jobs w/1+ Success", "success_attempts_jobs", ",d"),
+        ("Non-404 Failed Attempts", "notfilenotfound_failed_attempts", ",d"),
+        ("Non-404 Pct Attempts Failed", "pct_failed_attempts_not404", ".1%"),
+        ("Non-404 Pct Jobs Interrupted", "pct_jobs_affected_not404", ".1%"),
+        ("404 Failed Attempts", "filenotfound_failed_attempts", ",d"),
+        ("404 Pct Attempts Failed", "pct_failed_attempts_404", ".1%"),
+        ("404 Pct Jobs Interrupted", "pct_jobs_affected_404", ".1%"),
+        ("Total Failed Attempts", "all_failed_attempts", ",d"),
+        ("Total Jobs Interrupted", "final_failed_attempts", ",d"),
+    ]
+    columns = [{
+            "name": name,
+            "key": key,
+            "format": fmt,
+            "style": "td.text" if fmt == "s" else "td.numeric",
+        } for name, key, fmt in columns]
 
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
-
-    html.append('<table>')
+    html.append(f'''<table style="{styles['table']}">''')
 
     html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    for col in columns:
+        html.append(f'''\t\t<th style="{styles["td"]}">{col['name']}</th>''')
     html.append("\t</tr>")
     for row in resource_name_data["download"]:
-        row_class = ""
-        if row["pct_failed_attempts"] > err_threshold:
-            row_class = "err"
-        elif row["pct_failed_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
+        row_style = ""
+        if row["pct_failed_attempts_not404"] > err_threshold:
+            row_style = styles["tr.err"]
+        elif row["pct_failed_attempts_not404"] > warn_threshold:
+            row_style = styles["tr.warn"]
+        html.append(f'\t<tr style="{row_style}">')
+        for col in columns:
             try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+                html.append(f'''\t\t<td style="{styles['td']}; {styles[col["style"]]}">{row[col["key"]]:{col["format"]}}</td>''')
             except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
+                html.append(f'''\t\t<td style="{styles['td']}">{row[col["key"]]}</td>''')
         html.append("\t</tr>")
     html.append("</table>")
 
@@ -770,33 +841,44 @@ if __name__ == "__main__":
 
     html.append("<h2>Per OSDF origin upload (i.e. output transfer) statistics</h2>")
 
-    cols = ["endpoint_name", "endpoint_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected",    "endpoint"]
-    hdrs = ["Origin Name",   "Origin Institution",   "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted", "Origin Hostname"]
-    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%",                  "s"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+    columns = [
+        ("Origin Name", "endpoint_name", "s"),
+        ("Origin Institution", "endpoint_institution", "s"),
+        ("Total Attempts", "total_attempts", ",d"),
+        ("Total Uniq Jobs", "total_attempts_jobs", ",d"),
+        ("Successful Transfers", "success_attempts", ",d"),
+        ("Uniq Jobs w/1+ Success", "success_attempts_jobs", ",d"),
+        ("Total Failed Attempts", "all_failed_attempts", ",d"),
+        ("Pct Attempts Failed", "pct_failed_attempts", ".1%"),
+        ("Uniq Jobs Interrupted", "final_failed_attempts_jobs", ",d"),
+        ("Pct Uniq Jobs Interrupted", "pct_uniq_jobs_affected", ".1%"),
+        ("Origin Hostname", "endpoint", "s"),
+    ]
+    columns = [{
+            "name": name,
+            "key": key,
+            "format": fmt,
+            "style": "td.text" if fmt == "s" else "td.numeric",
+        } for name, key, fmt in columns]
 
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
-
-    html.append('<table>')
+    html.append(f'''<table style="{styles['table']}">''')
 
     html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    for col in columns:
+        html.append(f'''\t\t<th style="{styles["td"]}">{col['name']}</th>''')
     html.append("\t</tr>")
     for row in endpoint_data["upload"]:
-        row_class = ""
+        row_style = ""
         if row["pct_failed_attempts"] > err_threshold:
-            row_class = "err"
+            row_style = styles["tr.err"]
         elif row["pct_failed_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
+            row_style = styles["tr.warn"]
+        html.append(f'\t<tr style="{row_style}">')
+        for col in columns:
             try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+                html.append(f'''\t\t<td style="{styles['td']}; {styles[col["style"]]}">{row[col["key"]]:{col["format"]}}</td>''')
             except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
+                html.append(f'''\t\t<td style="{styles['td']}">{row[col["key"]]}</td>''')
         html.append("\t</tr>")
     html.append("</table>")
 
@@ -804,33 +886,43 @@ if __name__ == "__main__":
 
     html.append("<h2><strong>OSDF origin</strong> per OSPool resource upload (i.e. output transfer) statistics</h2>")
 
-    cols = ["resource_name", "resource_institution", "total_attempts", "total_attempts_jobs", "success_attempts",    "success_attempts_jobs", "all_failed_attempts", "pct_failed_attempts", "failed_attempts_per_job", "all_failed_attempts_jobs",    "final_failed_attempts_jobs", "pct_jobs_affected"]
-    hdrs = ["Resource Name", "Resource Institution", "Total Attempts", "Total Jobs",          "Successful Attempts", "Successful Jobs",       "Failed Attempts",     "Pct Attempts Failed", "Failed Attempts per Job", "Num Jobs w/ Failed Attempts", "Num Jobs Interrupted",       "Pct Jobs Interrupted"]
-    fmts = ["s",             "s",                    ",d",             ",d",                  ",d",                  ",d",                    ",d",                  ".1%",                 ",.2f",                    ",d",                          ",d",                         ".1%"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+    columns = [
+        ("Resource Name", "resource_name", "s"),
+        ("Resource Institution", "resource_institution", "s"),
+        ("Total Attempts", "total_attempts", ",d"),
+        ("Total Uniq Jobs", "total_attempts_jobs", ",d"),
+        ("Successful Transfers", "success_attempts", ",d"),
+        ("Uniq Jobs w/1+ Success", "success_attempts_jobs", ",d"),
+        ("Total Failed Attempts", "all_failed_attempts", ",d"),
+        ("Pct Attempts Failed", "pct_failed_attempts", ".1%"),
+        ("Uniq Jobs Interrupted", "final_failed_attempts_jobs", ",d"),
+        ("Pct Uniq Jobs Interrupted", "pct_uniq_jobs_affected", ".1%"),
+    ]
+    columns = [{
+            "name": name,
+            "key": key,
+            "format": fmt,
+            "style": "td.text" if fmt == "s" else "td.numeric",
+        } for name, key, fmt in columns]
 
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
-
-    html.append('<table>')
+    html.append(f'''<table style="{styles['table']}">''')
 
     html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    for col in columns:
+        html.append(f'''\t\t<th style="{styles["td"]}">{col['name']}</th>''')
     html.append("\t</tr>")
     for row in resource_name_data["upload"]:
-        row_class = ""
+        row_style = ""
         if row["pct_failed_attempts"] > err_threshold:
-            row_class = "err"
+            row_style = styles["tr.err"]
         elif row["pct_failed_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
+            row_style = styles["tr.warn"]
+        html.append(f'\t<tr style="{row_style}">')
+        for col in columns:
             try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+                html.append(f'''\t\t<td style="{styles['td']}; {styles[col["style"]]}">{row[col["key"]]:{col["format"]}}</td>''')
             except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
+                html.append(f'''\t\t<td style="{styles['td']}">{row[col["key"]]}</td>''')
         html.append("\t</tr>")
     html.append("</table>")
 
@@ -844,33 +936,41 @@ if __name__ == "__main__":
 
     html.append("<h2><strong>OSDF director</strong> per OSPool resource download (i.e. input transfer) statistics</h2>")
 
-    cols = ["resource_name", "resource_institution", "director_attempts", "director_attempts_jobs", "director_failed_attempts", "pct_failed_director_attempts", "failed_director_attempts_per_job", "director_failed_attempts_jobs", "pct_jobs_affected_director"]
-    hdrs = ["Resource Name", "Resource Institution", "Contact Attempts",  "Total Jobs",             "Failed Contact Attempts",  "Pct Contact Attempts Failed",  "Failed Contact Attempts per Job",  "Num Jobs Interrupted",          "Pct Jobs Interrupted"]
-    fmts = ["s",             "s",                    ",d",                ",d",                     ",d",                       ".1%",                          ",.2f",                             ",d",                            ".1%"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+    columns = [
+        ("Resource Name", "resource_name", "s"),
+        ("Resource Institution", "resource_institution", "s"),
+        ("Contact Attempts", "director_attempts", ",d"),
+        ("Total Uniq Jobs", "director_attempts_jobs", ",d"),
+        ("Failed Contact Attempts", "director_failed_attempts", ",d"),
+        ("Pct Contact Attempts Failed", "pct_failed_director_attempts", ".1%"),
+        ("Uniq Jobs Interrupted", "director_failed_attempts_jobs", ",d"),
+        ("Pct Uniq Jobs Interrupted", "pct_jobs_affected_director", ".1%"),
+    ]
+    columns = [{
+            "name": name,
+            "key": key,
+            "format": fmt,
+            "style": "td.text" if fmt == "s" else "td.numeric",
+        } for name, key, fmt in columns]
 
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
-
-    html.append('<table>')
+    html.append(f'''<table style="{styles['table']}">''')
 
     html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    for col in columns:
+        html.append(f'''\t\t<th style="{styles["td"]}">{col['name']}</th>''')
     html.append("\t</tr>")
     for row in resource_name_data["download"]:
-        row_class = ""
+        row_style = ""
         if row["pct_failed_director_attempts"] > err_threshold:
-            row_class = "err"
+            row_style = styles["tr.err"]
         elif row["pct_failed_director_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
+            row_style = styles["tr.warn"]
+        html.append(f'\t<tr style="{row_style}">')
+        for col in columns:
             try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+                html.append(f'''\t\t<td style="{styles['td']}; {styles[col["style"]]}">{row[col["key"]]:{col["format"]}}</td>''')
             except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
+                html.append(f'''\t\t<td style="{styles['td']}">{row[col["key"]]}</td>''')
         html.append("\t</tr>")
     html.append("</table>")
 
@@ -878,51 +978,69 @@ if __name__ == "__main__":
 
     html.append("<h2><strong>OSDF director</strong> per OSPool resource upload (i.e. output transfer) statistics</h2>")
 
-    cols = ["resource_name", "resource_institution", "director_attempts", "director_attempts_jobs", "director_failed_attempts", "pct_failed_director_attempts", "failed_director_attempts_per_job", "director_failed_attempts_jobs", "pct_jobs_affected_director"]
-    hdrs = ["Resource Name", "Resource Institution", "Contact Attempts",  "Total Jobs",             "Failed Contact Attempts",  "Pct Contact Attempts Failed",  "Failed Contact Attempts per Job",  "Num Jobs Interrupted",          "Pct Jobs Interrupted"]
-    fmts = ["s",             "s",                    ",d",                ",d",                     ",d",                       ".1%",                          ",.2f",                             ",d",                            ".1%"]
-    stys = ["text" if fmt == "s" else "num" for fmt in fmts]
+    html.append('<p>Note: Some of these errors could be from the user specifying a missing output file.')
 
-    hdrs = dict(zip(cols, hdrs))
-    fmts = dict(zip(cols, fmts))
-    stys = dict(zip(cols, stys))
+    columns = [
+        ("Resource Name", "resource_name", "s"),
+        ("Resource Institution", "resource_institution", "s"),
+        ("Contact Attempts", "director_attempts", ",d"),
+        ("Total Uniq Jobs", "director_attempts_jobs", ",d"),
+        ("Failed Contact Attempts", "director_failed_attempts", ",d"),
+        ("Pct Contact Attempts Failed", "pct_failed_director_attempts", ".1%"),
+        ("Uniq Jobs Interrupted", "director_failed_attempts_jobs", ",d"),
+        ("Pct Uniq Jobs Interrupted", "pct_jobs_affected_director", ".1%"),
+    ]
+    columns = [{
+            "name": name,
+            "key": key,
+            "format": fmt,
+            "style": "td.text" if fmt == "s" else "td.numeric",
+        } for name, key, fmt in columns]
 
-    html.append('<table>')
+    html.append(f'''<table style="{styles['table']}">''')
 
     html.append("\t<tr>")
-    for col in cols:
-        html.append(f"\t\t<th>{hdrs[col]}</th>")
+    for col in columns:
+        html.append(f'''\t\t<th style="{styles["td"]}">{col['name']}</th>''')
     html.append("\t</tr>")
     for row in resource_name_data["upload"]:
-        row_class = ""
+        row_style = ""
         if row["pct_failed_director_attempts"] > err_threshold:
-            row_class = "err"
+            row_style = styles["tr.err"]
         elif row["pct_failed_director_attempts"] > warn_threshold:
-            row_class = "warn"
-        html.append(f'\t<tr class="{row_class}">')
-        for col in cols:
+            row_style = styles["tr.warn"]
+        html.append(f'\t<tr style="{row_style}">')
+        for col in columns:
             try:
-                html.append(f'\t\t<td class="{stys[col]}">{row[col]:{fmts[col]}}</td>')
+                html.append(f'''\t\t<td style="{styles['td']}; {styles[col["style"]]}">{row[col["key"]]:{col["format"]}}</td>''')
             except ValueError:
-                html.append(f"\t\t<td>{row[col]}</td>")
+                html.append(f'''\t\t<td style="{styles['td']}">{row[col["key"]]}</td>''')
         html.append("\t</tr>")
     html.append("</table>")
 
+    html.append("<p>All transfer attempts in this report refer to <strong>OSDF object</strong> transfer attempts</p>")
+
     legend = {
-        "Total Attempts": "Number of OSDF object transfer attempts (multiple transfer attempts can be made per object per plugin invocation)",
-        "Contact Attempts": "Number of OSDF plugin invocations, each of which should attempt to contact the director",
-        "Total Jobs": "Number of unique job IDs that attempted at least one OSDF object transfer",
-        "Successful Attempts": "Number of OSDF object transfer attempts that succeeded",
-        "Successful Jobs": "Number of unique job IDs that had at least one successful OSDF object transfer attempt",
-        "Failed Attempts": "Number of OSDF object transfer attempts that failed (multiple failed transfer attempts can be made per object per plugin invocation)",
-        "404'd Attempts" : "Number of OSDF object transfer attempts that failed due to FileNotFound error",
-        "Pct Attempts Failed": "Failed Attempts / Total Attempts (as a percentage)",
-        "Pct Failed Attempts 404": "404'd Attempts / Failed Attempts (as a percentage)",
-        "Failed Attempts per Job": "Failed Attempts / Total Jobs",
-        "Num Jobs w/ Failed Attempts": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt",
-        "Num Jobs Interrupted": "Number of unique job IDs that logged at least one failed OSDF object transfer attempt that resulted in the job activation being terminated (i.e. the transfer plugin ran out of retries)",
-        "Pct Jobs Interrupted": "Num Jobs Interrupted / Total Jobs (as a percentage)",
-        "Pct Interrupted Jobs 404": "Num Jobs Interrupted due to FileNotFound error / Num Jobs Interrupted(as a percentage)",
+        "Total Attempts": "Number of transfer attempts (multiple transfer attempts can be made per object per plugin invocation)",
+        "Total Uniq Jobs": "Number of unique job IDs that attempted at least one transfer",
+        "Successful Transfers": "Number of transfer attempts that succeeded",
+        "Uniq Jobs w/1+ Success": "Number of unique job IDs that had at least one successful transfer attempt",
+        "Total Failed Attempts": "Number of transfer attempts that failed (multiple failed transfer attempts can be made per object per plugin invocation)",
+        "Pct Attempts Failed": "Total Failed Attempts / Total Attempts (as a percentage)",
+        "Total Jobs Interrupted": "Number of final transfer attempts that failed (i.e. number of jobs start/end attempts that failed due to file transfer error)",
+        "Contact Attempts": "Number of OSDF plugin invocations, each of which attempt to contact the director",
+        "Failed Contact Attempts": "Number of OSDF plugin invocations that failed to contact the director",
+        "Pct Contact Attempts Failed": "Failed Contact Attempts / Contact Attempts (as a percentage)",
+        "Uniq Jobs Interrupted": "Number of unique job IDs that logged at least one failed transfer (or director contact) attempt that resulted in the job activation being terminated (i.e. the transfer plugin ran out of retries)",
+        "Pct Uniq Jobs Interrupted": "Uniq Jobs Interrupted / Total Uniq Jobs (as a percentage)",
+        "Non-404 Failed Attempts": "Number of transfer attempts that failed due to an error other than FileNotFound",
+        "Non-404 Pct Attempts Failed": "Non-404 Failed Attempts / Total Attempts (as a percentage)",
+        "Non-404 Jobs Interrupted": "(not displayed) Number of final transfer attempts that failed due to an error other than FileNotFound",
+        "Non-404 Pct Jobs Interrupted": "Non-404 Jobs Interrupted / Total Jobs Interrupted (as a percentage)",
+        "404 Failed Attempts": "Number of transfer attempts that failed due to FileNotFound",
+        "404 Pct Attempts Failed": "404 Failed Attempts / Total Attempts (as a percentage)",
+        "404 Jobs Interrupted": "(not displayed) Number of final transfer attempts that failed due to FileNotFound",
+        "404 Pct Jobs Interrupted": "404 Jobs Interrupted / Total Jobs Interrupted (as a percentage)",
     }
     html.append("<ul>")
     for term, definition in legend.items():
