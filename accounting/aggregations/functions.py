@@ -22,6 +22,7 @@ from dns.resolver import query as dns_query
 
 
 OSDF_DIRECTOR_SERVER_URL = "https://osdf-director.osg-htc.org/api/v1.0/director_ui/servers"
+UWDF_DIRECTOR_SERVER_URL = "https://uwdf-director.chtc.wisc.edu/api/v1.0/director_ui/servers"
 INSTITUTION_DATABASE_URL = "https://topology-institutions.osg-htc.org/api/institution_ids"
 TOPOLOGY_PROJECT_DATA_URL = "https://topology.opensciencegrid.org/miscproject/xml"
 TOPOLOGY_RESOURCE_DATA_URL = "https://topology.opensciencegrid.org/rgsummary/xml"
@@ -110,6 +111,39 @@ def get_osdf_director_servers(cache_file=Path("./osdf_director_servers.pickle"))
 
     pickle.dump(osdf_director_servers, cache_file.open("wb"))
     return osdf_director_servers
+
+
+def get_uwdf_director_servers(cache_file=Path("./uwdf_director_servers.pickle")) -> dict:
+    uwdf_director_servers = {}
+
+    # Use cache if less than 20 minutes old
+    if cache_file.exists():
+        try:
+            uwdf_director_servers = pickle.load(cache_file.open("rb"))
+        except Exception:
+            pass
+    if len(uwdf_director_servers) > 0 and cache_file.stat().st_mtime > time.time() - 1200:
+        return uwdf_director_servers
+
+    tries = 0
+    max_tries = 5
+    while tries < max_tries:
+        try:
+            with urlopen(UWDF_DIRECTOR_SERVER_URL) as f:
+                for server in json.load(f):
+                    for url in ["url", "authUrl", "webUrl", "brokerUrl"]:
+                        if url in server and len(server[url]) > 0:
+                            uwdf_director_servers[server[url]] = server
+        except HTTPError:
+            time.sleep(2**tries)
+            tries += 1
+            if tries == max_tries and len(uwdf_director_servers) == 0:
+                raise
+        else:
+            break
+
+    pickle.dump(uwdf_director_servers, cache_file.open("wb"))
+    return uwdf_director_servers
 
 
 def get_institution_database(cache_file=Path("./institution_database.pickle")) -> dict:
