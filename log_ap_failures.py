@@ -13,10 +13,13 @@ import elasticsearch
 
 LOG_SCHEDD_ENTRY_RE = re.compile(r"(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(,\d+)? : (?P<logger>[^:]+):(?P<log_level>\S+) - Schedd\s+(?P<schedd>\S+)\s+history:\s+response count:\s+(?P<num_ads>\d+);\s+last completion\s+(?P<last_job_seen>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2});")
 LOG_SCHEDD_FAILURE_RE = re.compile(r"(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(,\d+)? : (?P<logger>[^:]+):(?P<log_level>\S+) - Failed to query schedd for job history:\s+(?P<schedd>\S+)")
+LOG_SCHEDD_TIMEOUT_RE = re.compile(r"(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(,\d+)? : (?P<logger>[^:]+):(?P<log_level>\S+) - Daemon\s+(?P<schedd>\S+)\s+history timed out")
 LOG_HTCONDOR_ERROR_RE = re.compile(r"htcondor.HTCondorIOError:\s+(?P<error>.*)")
+LOG_TIMEOUT_ERROR_RE = re.compile(r"multiprocessing\.context\.TimeoutError")
 LINE_REGEXES = {
     "schedd_entry": LOG_SCHEDD_ENTRY_RE,
     "schedd_failure": LOG_SCHEDD_FAILURE_RE,
+    "schedd_timeout": LOG_SCHEDD_TIMEOUT_RE
 }
 
 
@@ -207,6 +210,8 @@ def main():
                 m = LOG_HTCONDOR_ERROR_RE.match(current_traceback[-1])
                 if m:
                     last_error["htcondor_error"] = m.group("error")
+                elif LOG_TIMEOUT_ERROR_RE.match(current_traceback[-1]):
+                    last_error["htcondor_error"] = "Timed out while reading history"
                 errors.append(last_error)
                 last_ckpt = f.tell()
                 continue
@@ -225,7 +230,7 @@ def main():
                 m = line_re.match(line)
                 if m:
                     #print(f"Found {line_type}: {m.groupdict()}")
-                    if line_type == "schedd_failure":
+                    if line_type in {"schedd_failure", "schedd_timeout"}:
                         last_error = m.groupdict()
                     else:
                         successes.append(m.groupdict())
