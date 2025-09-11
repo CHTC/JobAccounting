@@ -12,7 +12,7 @@ USER root
 ARG SCRIPT_DIR=/opt/job_accounting_scripts
 RUN mkdir -p ${SCRIPT_DIR}/lib
 
-COPY accounting/aggregations/uwdf_report.py $SCRIPT_DIR/lib/
+COPY accounting/aggregations/uwdf_usage_report.py $SCRIPT_DIR/lib/uwdf_report.py
 COPY accounting/aggregations/functions.py $SCRIPT_DIR/lib/
 
 ENV PYTHONPATH=${SCRIPT_DIR}/lib
