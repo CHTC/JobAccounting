@@ -710,7 +710,7 @@ if __name__ == "__main__":
         resource_name_data_totals[transfer_type]["pct_failed_director_attempts"] = resource_name_data_totals[transfer_type]["director_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_attempts"], resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["failed_director_attempts_per_job"] = resource_name_data_totals[transfer_type]["director_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_attempts_jobs"], resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["pct_jobs_affected_director"] = resource_name_data_totals[transfer_type]["director_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["director_attempts_jobs"], resource_name_data_totals[transfer_type]["director_failed_attempts_jobs"], 1)
-        resource_name_data[transfer_type].sort(key=itemgetter("pct_failed_attempts_not404"), reverse=True)
+        resource_name_data[transfer_type].sort(key=itemgetter("total_attempts"), reverse=True)
         resource_name_data[transfer_type].insert(0, resource_name_data_totals[transfer_type])
 
     warn_threshold = 0.05
@@ -933,7 +933,7 @@ if __name__ == "__main__":
     # re-sort tables for director views
     for transfer_type in ["download", "upload"]:
         _ = resource_name_data[transfer_type].pop(0)  # pop out the totals row
-        resource_name_data[transfer_type].sort(key=itemgetter("pct_failed_director_attempts"), reverse=True)
+        resource_name_data[transfer_type].sort(key=itemgetter("total_attempts"), reverse=True)
         resource_name_data[transfer_type].insert(0, resource_name_data_totals[transfer_type])  # add back in the totals row
 
     ### DIRECTOR RESOURCE DOWNLOAD TABLE
