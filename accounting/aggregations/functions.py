@@ -401,6 +401,7 @@ def send_email(
         subject,
         from_addr,
         to_addrs=[],
+        text="",
         html="",
         cc_addrs=[],
         bcc_addrs=[],
@@ -414,7 +415,17 @@ def send_email(
         print("ERROR: No recipients in the To: field, not sending email", file=sys.stderr)
         return
 
-    msg = MIMEMultipart()
+    msg = MIMEMultipart("mixed")
+    if len(html) > 0 and len(text) > 0:
+        msg_text = MIMEMultipart("alternative")
+        msg_text.attach(MIMEText(html, "html"))
+        msg_text.attach(MIMEText(text, "plain"))
+        msg.attach(msg_text)
+    elif len(html) > 0:
+        msg.attach(MIMEText(html, "html"))
+    else:
+        msg.attach(MIMEText(text, "plain"))
+
     msg["From"] = from_addr
     msg["To"] = ", ".join(to_addrs)
     if len(cc_addrs) > 0:
@@ -426,8 +437,6 @@ def send_email(
     msg["Subject"] = subject
     msg["Message-ID"] = f"<{subject}-{time.time()}-{from_addr}>".replace(" ", "-").casefold()
     msg["Date"] = formatdate(localtime=True)
-
-    msg.attach(MIMEText(html, "html"))
 
     for fname in attachments:
         fpath = Path(fname)

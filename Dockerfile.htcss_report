@@ -1,0 +1,18 @@
+FROM ghcr.io/mamba-org/micromamba:2.0.8-debian12-slim
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
+
+ARG ELASTICSEARCH_VERSION=7.17.6
+ARG ELASTICSEARCH_DSL_VERSION=7.4.0
+
+RUN micromamba install -y -c conda-forge "python=3.11" "elasticsearch=${ELASTICSEARCH_VERSION}" "elasticsearch-dsl=${ELASTICSEARCH_DSL_VERSION}" "dnspython" && \
+    micromamba clean --all --yes
+
+
+USER root
+ARG SCRIPT_DIR=/opt/monitoring_scripts
+RUN mkdir -p ${SCRIPT_DIR}/lib
+
+COPY accounting/aggregations/htcss_report.py $SCRIPT_DIR/lib/
+COPY accounting/aggregations/functions.py $SCRIPT_DIR/lib/
+
+ENV PYTHONPATH=${SCRIPT_DIR}/lib
