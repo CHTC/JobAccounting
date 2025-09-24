@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=Path, help="JSON file to keep track of last line read for a log file")
     parser.add_argument("--start", type=valid_date, help="Start date (defaults to yesterday)")
     parser.add_argument("--end", type=valid_date, help="End date (defaults to today)")
+    parser.add_argument("--dry-run", action="store_true", help="Just print out stats, do not update file or ES")
     return parser.parse_args()
 
 
@@ -242,7 +243,8 @@ def main():
 
             last_ckpt = f.tell()
 
-    store_checkpoint(last_ckpt, args.checkpoint, args.log_file, args.end)
+    if not args.dry_run:
+        store_checkpoint(last_ckpt, args.checkpoint, args.log_file, args.end)
 
     schedd_stats = {}
     for success in successes:
@@ -268,10 +270,11 @@ def main():
 
     print(json.dumps(schedd_stats, indent=2))
 
-    if Path("tiger-es-ap-stats-config.json").exists():
-        print("Pushing AP data to Tiger Elasticsearch")
-        tiger_args = json.load(Path("tiger-es-ap-stats-config.json").open("r"))
-        push_stats_to_es(schedd_stats, "adstash-ospool-schedd-stats-000001", **tiger_args)
+    if not args.dry_run:
+        if Path("tiger-es-ap-stats-config.json").exists():
+            print("Pushing AP data to Tiger Elasticsearch")
+            tiger_args = json.load(Path("tiger-es-ap-stats-config.json").open("r"))
+            push_stats_to_es(schedd_stats, "adstash-ospool-schedd-stats-000001", **tiger_args)
 
 
 if __name__ == "__main__":
