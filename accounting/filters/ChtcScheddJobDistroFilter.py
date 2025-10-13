@@ -1,8 +1,3 @@
-
-import htcondor
-import pickle
-from pathlib import Path
-from elasticsearch import Elasticsearch
 import elasticsearch.helpers
 from .BaseFilter import BaseFilter
 from functools import lru_cache

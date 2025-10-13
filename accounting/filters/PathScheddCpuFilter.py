@@ -1,5 +1,4 @@
 import statistics as stats
-from pathlib import Path
 from ast import literal_eval
 from .BaseFilter import BaseFilter
 
