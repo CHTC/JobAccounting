@@ -183,14 +183,14 @@ def get_query(
         size=16,
     )
 
-    resource_name_agg = A(
-        "terms",
-        field="MATCH_EXP_JOBGLIDEIN_ResourceName.keyword",
-        size=256,
-    )
-    resource_name_agg.metric("shadow_starts", shadow_starts_agg)
-    resource_name_agg.metric("job_starts", job_starts_agg)
-    resource_name_agg.bucket("condor_version", condor_version_agg)
+    # resource_name_agg = A(
+    #     "terms",
+    #     field="MATCH_EXP_JOBGLIDEIN_ResourceName.keyword",
+    #     size=256,
+    # )
+    # resource_name_agg.metric("shadow_starts", shadow_starts_agg)
+    # resource_name_agg.metric("job_starts", job_starts_agg)
+    # resource_name_agg.bucket("condor_version", condor_version_agg)
 
     ap_name_agg = A(
         "terms",
@@ -203,13 +203,13 @@ def get_query(
 
     for vacate_reason in get_vacate_reasons(client, index):
         vacate_reason_agg = A("sum", field=vacate_reason)
-        resource_name_agg.metric(vacate_reason, vacate_reason_agg)
+        # resource_name_agg.metric(vacate_reason, vacate_reason_agg)
         ap_name_agg.metric(vacate_reason, vacate_reason_agg)
         query.aggs.metric(vacate_reason, vacate_reason_agg)
 
     query.aggs.metric("shadow_starts", shadow_starts_agg)
     query.aggs.metric("job_starts", job_starts_agg)
-    query.aggs.bucket("resource_name", resource_name_agg)
+    # query.aggs.bucket("resource_name", resource_name_agg)
     query.aggs.bucket("ap_name", ap_name_agg)
 
     return query
@@ -292,30 +292,30 @@ def main():
         raise err
     print(f"{datetime.now()} - Done.")
 
-    resource_name_data = convert_buckets_to_dict(result.aggregations.resource_name.buckets)
+    # resource_name_data = convert_buckets_to_dict(result.aggregations.resource_name.buckets)
     ap_name_data = convert_buckets_to_dict(result.aggregations.ap_name.buckets)
 
     vacate_reasons = get_vacate_reasons(es, index)
 
-    resource_name_metrics = []
-    for resource_name, d in resource_name_data.items():
-        metrics = {
-            "Name": resource_name,
-            "Version": ".".join(str(x) for x in max(tuple(int(x) for x in cv.split()[1].split(".")) for cv in d["condor_version"].keys())),
-            "Jobs": d["value"],
-            "% Shadows w/o Exec": 1 - d["job_starts"] / max(d["shadow_starts"], 1),
-            "Most Common Vacate Reason": "None",
-            "% MCVR": 0,
-        }
-        if tuple(int(x) for x in metrics["Version"].split(".")) >= (24, 11, 1):
-            if d["shadow_starts"] > d["job_starts"]:
-                max_vacate_reason, max_vacate_reason_n = max({vr: d[vr] for vr in vacate_reasons}.items(), key=itemgetter(1))
-                metrics["Most Common Vacate Reason"] = max_vacate_reason.split(".", maxsplit=1)[-1]
-                metrics["% MCVR"] = max_vacate_reason_n / max(d["shadow_starts"], 1)
-        else:
-            metrics["Most Common Vacate Reason"] = "-"
-        resource_name_metrics.append(metrics)
-    resource_name_metrics.sort(key=itemgetter("% Shadows w/o Exec"), reverse=True)
+    # resource_name_metrics = []
+    # for resource_name, d in resource_name_data.items():
+    #     metrics = {
+    #         "Name": resource_name,
+    #         "Version": ".".join(str(x) for x in max(tuple(int(x) for x in cv.split()[1].split(".")) for cv in d["condor_version"].keys())),
+    #         "Jobs": d["value"],
+    #         "% Shadows w/o Exec": 1 - d["job_starts"] / max(d["shadow_starts"], 1),
+    #         "Most Common Vacate Reason": "None",
+    #         "% MCVR": 0,
+    #     }
+    #     if tuple(int(x) for x in metrics["Version"].split(".")) >= (24, 11, 1):
+    #         if d["shadow_starts"] > d["job_starts"]:
+    #             max_vacate_reason, max_vacate_reason_n = max({vr: d[vr] for vr in vacate_reasons}.items(), key=itemgetter(1))
+    #             metrics["Most Common Vacate Reason"] = max_vacate_reason.split(".", maxsplit=1)[-1]
+    #             metrics["% MCVR"] = max_vacate_reason_n / max(d["shadow_starts"], 1)
+    #     else:
+    #         metrics["Most Common Vacate Reason"] = "-"
+    #     resource_name_metrics.append(metrics)
+    # resource_name_metrics.sort(key=itemgetter("% Shadows w/o Exec"), reverse=True)
 
     ap_name_metrics = []
     for ap_name, d in ap_name_data.items():
@@ -335,7 +335,7 @@ def main():
         else:
             metrics["Most Common Vacate Reason"] = "-"
         ap_name_metrics.append(metrics)
-    ap_name_metrics.sort(key=itemgetter("% Shadows w/o Exec"), reverse=True)
+    ap_name_metrics.sort(key=itemgetter("Jobs"), reverse=True)
 
     total_metrics = {
         "Name": "TOTALS",
@@ -353,23 +353,25 @@ def main():
     text.append(f"{total_metrics['Name']:<22.22} {total_metrics['% Shadows w/o Exec']:>6.1%} {total_metrics['Jobs']:>9,d}")
     text.append("")
 
-    text.append(f"{'AP':<22} {'%SnE':>6} {'Jobs':>9} {'Version':<8} {'Most Common Reason':<24} {'%':>6}")
+    text.append(f"{'AP':<22} {'%SnE':>6} {'Jobs':>9} {'Version':<8} {'Most Common Vac Reason':<23} {'%Shdws':>7}")
     text.append(80*"-")
     for m in ap_name_metrics:
-        text.append(f"{m['Name']:<22.22} {m['% Shadows w/o Exec']:>6.1%} {m['Jobs']:>9,d} {m['Version']:<8} {m['Most Common Vacate Reason']:<24.24} {m['% MCVR']:>6.1%}")
+        text.append(f"""{m['Name']:<22.22} {m['% Shadows w/o Exec']:>6.1%} {m['Jobs']:>9,d} {m['Version']:<8} {m['Most Common Vacate Reason']:<24.24} {f'{m["% MCVR"]:>6.1%}' if m['Most Common Vacate Reason'] != "-" else ''}""")
     text.append("")
 
-    text.append(f"{'GLIDEIN_ResourceName':<22} {'%SnE':>6} {'Jobs':>9} {'':<8} {'Most Common Reason':<24} {'%':>6}")
-    text.append(80*"-")
-    for m in resource_name_metrics:
-        text.append(f"{m['Name']:<22.22} {m['% Shadows w/o Exec']:>6.1%} {m['Jobs']:>9,d} {'':8} {m['Most Common Vacate Reason']:<24.24} {m['% MCVR']:>6.1%}")
-    text.append("")
+    # text.append(f"{'GLIDEIN_ResourceName':<22} {'%SnE':>6} {'Jobs':>9} {'':<8} {'Most Common Reason':<24} {'% Shdws':>6}")
+    # text.append(80*"-")
+    # for m in resource_name_metrics:
+    #     text.append(f"{m['Name']:<22.22} {m['% Shadows w/o Exec']:>6.1%} {m['Jobs']:>9,d} {'':8} {m['Most Common Vacate Reason']:<24.24} {m['% MCVR']:>6.1%}")
+    # text.append("")
 
     text.append("Legend")
     text.append("\t%SnE: Percent of shadow starts that did not result in job execution")
-    text.append("\tMost Common Reason: Most common vacate reason (includs jobs that did execute)")
-    text.append('\t"-": All jobs were submitted pre-24.11.1 and have no NumVacateReasons')
+    text.append("\tJobs: Number of completed jobs (i.e. that hit the history file)")
     text.append("\tVersion: Latest version at submit time found for any job on this AP")
+    text.append("\tMost Common Vac Reason: Most common vacate reason across all shadows")
+    text.append("\t%Shdws: Percent of all shadows that vacated for the most common reason")
+    text.append('\t"-": All jobs were submitted pre-24.11.1 and have no NumVacateReasons')
 
     lr = "\n"
     html = f'''<!DOCTYPE html>
