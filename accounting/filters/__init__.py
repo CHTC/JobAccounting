@@ -1,5 +1,6 @@
 from .BaseFilter import BaseFilter
 from .OsgScheddCpuFilter import OsgScheddCpuFilter
+from .OsgScheddResourcesFilter import OsgScheddResourcesFilter
 from .OsgScheddCpuHeldFilter import OsgScheddCpuHeldFilter
 from .OsgScheddCpuRemovedFilter import OsgScheddCpuRemovedFilter
 from .OsgScheddCpuMonthlyFilter import OsgScheddCpuMonthlyFilter
