@@ -28,7 +28,7 @@ DEFAULT_COLUMNS = {
     145: "95% Hrs",
     150: "Max Hrs",
     160: "Mean Hrs",
-    170: "Std Hrs",
+    170: "Stdv Hrs",
 
     200: "&nbsp;",
 
@@ -39,7 +39,7 @@ DEFAULT_COLUMNS = {
     245: "95% Req Mem",
     250: "Max Req Mem",
     260: "Mean Req Mem",
-    270: "Std Req Mem",
+    270: "Stdv Req Mem",
 
     300: "&nbsp;",
 
@@ -50,7 +50,7 @@ DEFAULT_COLUMNS = {
     345: "95% Use Mem",
     350: "Max Use Mem",
     360: "Mean Use Mem",
-    370: "Std Use Mem",
+    370: "Stdv Use Mem",
 }
 
 
@@ -909,10 +909,10 @@ class OsgScheddResourcesFilter(BaseFilter):
             for col in [f"{x} Hrs" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
                 row[col] = 0
         if len(long_times_sorted) > 1:
-            row["Std Hrs"] = stats.stdev(long_times_sorted) / 3600
+            row["Stdv Hrs"] = stats.stdev(long_times_sorted) / 3600
         else:
             # There is no variance if there is only one value
-            row["Std Hrs"] = 0
+            row["Stdv Hrs"] = 0
 
         memory_requests_sorted = self.clean(data['RequestMemory'])
         memory_requests_sorted.sort()
@@ -928,10 +928,10 @@ class OsgScheddResourcesFilter(BaseFilter):
             for col in [f"{x} Req Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
                 row[col] = 0
         if len(memory_requests_sorted) > 1:
-            row["Std Req Mem"] = stats.stdev(memory_requests_sorted) / 1024
+            row["Stdv Req Mem"] = stats.stdev(memory_requests_sorted) / 1024
         else:
             # There is no variance if there is only one value
-            row["Std Req Mem"] = 0
+            row["Stdv Req Mem"] = 0
 
         memory_usages_sorted = self.clean(data['MemoryUsage'])
         memory_usages_sorted.sort()
@@ -947,10 +947,10 @@ class OsgScheddResourcesFilter(BaseFilter):
             for col in [f"{x} Use Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
                 row[col] = 0
         if len(memory_usages_sorted) > 1:
-            row["Std Use Mem"] = stats.stdev(memory_usages_sorted) / 1024
+            row["Stdv Use Mem"] = stats.stdev(memory_usages_sorted) / 1024
         else:
             # There is no variance if there is only one value
-            row["Std Use Mem"] = 0
+            row["Stdv Use Mem"] = 0
 
         # # Compute job unit metrics
         # row["Med Job Units"] = stats.median(self.clean(data["NumJobUnits"], allow_empty_list=False))

@@ -94,7 +94,7 @@ class OsgScheddResourcesFormatter(BaseFormatter):
 
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
-            "&nbsp;": lambda x: "<td></td>",
+            "&nbsp;": lambda x: '<td style="background-color: #ddd"></td>',
             "PI Institution": lambda x: f'<td class="text">{compact_institution(x)}</td>',
             "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
@@ -103,7 +103,7 @@ class OsgScheddResourcesFormatter(BaseFormatter):
             "95% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
-            "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            "Stdv Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Min Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "25% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "Med Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
@@ -111,7 +111,7 @@ class OsgScheddResourcesFormatter(BaseFormatter):
             "95% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "Max Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "Mean Req Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Std Req Mem":    lambda x: f"<td>{float(x):.1f}</td>",
+            "Stdv Req Mem":    lambda x: f"<td>{float(x):.1f}</td>",
             "Min Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "25% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "Med Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
@@ -119,7 +119,7 @@ class OsgScheddResourcesFormatter(BaseFormatter):
             "95% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "Max Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
             "Mean Use Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Std Use Mem":    lambda x: f"<td>{float(x):.1f}</td>",
+            "Stdv Use Mem":    lambda x: f"<td>{float(x):.1f}</td>",
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
         }
         return super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
