@@ -321,7 +321,7 @@ def main():
 
     cols = ["project", "files_transferred", "gb_transferred", "jobs"]
     hdrs = ["Project", "Files"            , "GBs"           , "Jobs"]
-    fmts = ["s"      , ",d"               , ",.3f"          , ",d"]
+    fmts = ["s"      , ",d"               , ",.0f"          , ",d"]
     stys = ["text" if fmt == "s" else "num" for fmt in fmts]
 
     hdrs = dict(zip(cols, hdrs))
