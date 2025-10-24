@@ -36,14 +36,14 @@ DEFAULT_COLUMNS = {
     100: "Mean Actv Hrs",
     105: "Mean Setup Secs",
 
-    110: "Min Hrs",
-    120: "25% Hrs",
-    130: "Med Hrs",
-    140: "75% Hrs",
-    145: "95% Hrs",
-    150: "Max Hrs",
-    160: "Mean Hrs",
-    170: "Std Hrs",
+    # 110: "Min Hrs",
+    # 120: "25% Hrs",
+    # 130: "Med Hrs",
+    # 140: "75% Hrs",
+    # 145: "95% Hrs",
+    # 150: "Max Hrs",
+    # 160: "Mean Hrs",
+    # 170: "Std Hrs",
 
     180: "Input Files / Exec Att",
 #    181: "Input MB / Exec Att",
@@ -585,18 +585,18 @@ class OsgScheddCpuFilter(BaseFilter):
         if len(setup_durations) > 0:
             row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
 
-        # Compute time percentiles and stats
-        if len(long_times_sorted) > 0:
-            row["Min Hrs"]  = long_times_sorted[ 0] / 3600
-            row["25% Hrs"]  = long_times_sorted[  len(long_times_sorted)//4] / 3600
-            row["Med Hrs"]  = stats.median(long_times_sorted) / 3600
-            row["75% Hrs"]  = long_times_sorted[3*len(long_times_sorted)//4] / 3600
-            row["95% Hrs"]  = long_times_sorted[int(0.95*len(long_times_sorted))] / 3600
-            row["Max Hrs"]  = long_times_sorted[-1] / 3600
-            row["Mean Hrs"] = stats.mean(long_times_sorted) / 3600
-        else:
-            for col in [f"{x} Hrs" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
-                row[col] = 0
+        # # Compute time percentiles and stats
+        # if len(long_times_sorted) > 0:
+        #     row["Min Hrs"]  = long_times_sorted[ 0] / 3600
+        #     row["25% Hrs"]  = long_times_sorted[  len(long_times_sorted)//4] / 3600
+        #     row["Med Hrs"]  = stats.median(long_times_sorted) / 3600
+        #     row["75% Hrs"]  = long_times_sorted[3*len(long_times_sorted)//4] / 3600
+        #     row["95% Hrs"]  = long_times_sorted[int(0.95*len(long_times_sorted))] / 3600
+        #     row["Max Hrs"]  = long_times_sorted[-1] / 3600
+        #     row["Mean Hrs"] = stats.mean(long_times_sorted) / 3600
+        # else:
+        #     for col in [f"{x} Hrs" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+        #         row[col] = 0
 
         if len(long_times_sorted) > 1:
             row["Std Hrs"] = stats.stdev(long_times_sorted) / 3600
@@ -941,23 +941,23 @@ class OsgScheddCpuFilter(BaseFilter):
         if len(setup_durations) > 0:
             row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
 
-        # Compute time percentiles and stats
-        if len(long_times_sorted) > 0:
-            row["Min Hrs"]  = long_times_sorted[ 0] / 3600
-            row["25% Hrs"]  = long_times_sorted[  len(long_times_sorted)//4] / 3600
-            row["Med Hrs"]  = stats.median(long_times_sorted) / 3600
-            row["75% Hrs"]  = long_times_sorted[3*len(long_times_sorted)//4] / 3600
-            row["95% Hrs"]  = long_times_sorted[int(0.95*len(long_times_sorted))] / 3600
-            row["Max Hrs"]  = long_times_sorted[-1] / 3600
-            row["Mean Hrs"] = stats.mean(long_times_sorted) / 3600
-        else:
-            for col in [f"{x} Hrs" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
-                row[col] = 0
-        if len(long_times_sorted) > 1:
-            row["Std Hrs"] = stats.stdev(long_times_sorted) / 3600
-        else:
-            # There is no variance if there is only one value
-            row["Std Hrs"] = 0
+        # # Compute time percentiles and stats
+        # if len(long_times_sorted) > 0:
+        #     row["Min Hrs"]  = long_times_sorted[ 0] / 3600
+        #     row["25% Hrs"]  = long_times_sorted[  len(long_times_sorted)//4] / 3600
+        #     row["Med Hrs"]  = stats.median(long_times_sorted) / 3600
+        #     row["75% Hrs"]  = long_times_sorted[3*len(long_times_sorted)//4] / 3600
+        #     row["95% Hrs"]  = long_times_sorted[int(0.95*len(long_times_sorted))] / 3600
+        #     row["Max Hrs"]  = long_times_sorted[-1] / 3600
+        #     row["Mean Hrs"] = stats.mean(long_times_sorted) / 3600
+        # else:
+        #     for col in [f"{x} Hrs" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+        #         row[col] = 0
+        # if len(long_times_sorted) > 1:
+        #     row["Std Hrs"] = stats.stdev(long_times_sorted) / 3600
+        # else:
+        #     # There is no variance if there is only one value
+        #     row["Std Hrs"] = 0
 
         # Compute job unit metrics
         row["Med Job Units"] = stats.median(self.clean(data["NumJobUnits"], allow_empty_list=False))

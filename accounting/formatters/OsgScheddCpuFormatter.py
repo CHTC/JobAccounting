@@ -95,14 +95,14 @@ class OsgScheddCpuFormatter(BaseFormatter):
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
             "PI Institution": lambda x: f'<td class="text">{compact_institution(x)}</td>',
-            "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Med Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "75% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "95% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
-            "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Med Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "75% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "95% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
+            # "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Mean Actv Hrs": lambda x: f"<td>{hhmm(x)}</td>",
             "CPU Hours / Bad Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Shadw Starts / Job Id":    lambda x: f"<td>{float(x):.2f}</td>",
@@ -174,7 +174,7 @@ class OsgScheddCpuFormatter(BaseFormatter):
         custom_items["Mean Actv Hrs"] = "Mean slot activation time (in hours)"
         custom_items["Mean Setup Secs"] = "Mean slot activation setup time (in seconds). The slot activation setup time is the duration from when a shadow sends a claim activation to when the shadow is told that a job's executable is running."
 
-        custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
+        # custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
 
         custom_items["Input Files / Exec Att"] = "Number of files (all protocols) sent as part of the input sandbox per job start"
         custom_items["Input MB / Exec Att"] = "Average size (in MB) of input sandboxes"

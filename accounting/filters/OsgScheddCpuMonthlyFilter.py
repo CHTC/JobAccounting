@@ -35,9 +35,9 @@ DEFAULT_COLUMNS = {
     81: "% Jobs Over Rqst Disk",
     82: "% Jobs using S'ty",
 
-    110: "Min Hrs",
-    150: "Max Hrs",
-    160: "Mean Hrs",
+    # 110: "Min Hrs",
+    # 150: "Max Hrs",
+    # 160: "Mean Hrs",
 
     180: "Input Files / Exec Att",
 #    181: "Input MB / Exec Att",
@@ -231,7 +231,7 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["SingularityJobs"] = int(is_singularity)
         sum_cols["OverDiskJobs"] = int(is_over_disk_request)
 
-        sum_cols["TotalLongJobWallClockTime"] = long_job_wallclock_time
+        # sum_cols["TotalLongJobWallClockTime"] = long_job_wallclock_time
         sum_cols["GoodCpuTime"] = (goodput_time * max(i.get("RequestCpus", 1), 1))
         sum_cols["CpuTime"] = (i.get("RemoteWallClockTime", 0) * max(i.get("RequestCpus", 1), 1))
         sum_cols["BadCpuTime"] = ((i.get("RemoteWallClockTime", 0) - goodput_time) * max(i.get("RequestCpus", 1), 1))
@@ -258,7 +258,7 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["NumVacatesTransferInputError"] = i.get("NumVacatesByReason", {}).get("TransferInputError", 0)
 
         max_cols = {}
-        max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
+        # max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
         max_cols["MaxRequestMemory"] = i.get("RequestMemory", 0)
         max_cols["MaxMemoryUsage"] = i.get("MemoryUsage", 0)
         max_cols["MaxRequestDisk"] = i.get("RequestDisk", 0)
@@ -267,7 +267,7 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         max_cols["MaxJobUnits"] = job_units
 
         min_cols = {}
-        min_cols["MinLongJobWallClockTime"] = long_job_wallclock_time
+        # min_cols["MinLongJobWallClockTime"] = long_job_wallclock_time
 
         for col in sum_cols:
             o[col] = (o.get(col) or 0) + sum_cols[col]
@@ -452,12 +452,12 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
 
-        if data["LongJobs"] > 0:
-            row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-            row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-            row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        else:
-            row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
+        # if data["LongJobs"] > 0:
+        #     row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
+        #     row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
+        #     row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
+        # else:
+        #     row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
 
         row["Num Users"]        = len(data["Users"])
         row["Num Sites"]        = len(data["Sites"])
@@ -560,12 +560,12 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         row["Num TransferInputError"] = data["NumVacatesTransferInputError"]
         row["Num Jobs Post 24.11.1"] = data["NumJobsWithVacatesByReason"]
 
-        if data["LongJobs"] > 0:
-            row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-            row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-            row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        else:
-            row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
+        # if data["LongJobs"] > 0:
+        #     row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
+        #     row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
+        #     row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
+        # else:
+        #     row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
