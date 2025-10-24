@@ -104,21 +104,21 @@ class OsgScheddResourcesFormatter(BaseFormatter):
             "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
             "Stdv Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Min Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "25% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Med Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "75% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "95% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Max Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Mean Req Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
+            "Min Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "25% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Med Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "75% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "95% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Max Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Mean Req Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
             "Stdv Req Mem":    lambda x: f"<td>{float(x):.1f}</td>",
-            "Min Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "25% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Med Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "75% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "95% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Max Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
-            "Mean Use Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;1</td>",
+            "Min Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "25% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Med Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "75% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "95% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Max Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Mean Use Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
             "Stdv Use Mem":    lambda x: f"<td>{float(x):.1f}</td>",
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
         }
@@ -137,6 +137,8 @@ class OsgScheddResourcesFormatter(BaseFormatter):
         custom_items["Min/25%/Median/75%/Max/Mean/Std Req Mem"] = "Final execution memory request in GB"
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Use Mem"] = "Final execution memory usage in GB"
+
+        custom_items["&lt;"] = "Memory request or usage was below 1 GB"
 
         html = super().get_legend(custom_items)
         return html
