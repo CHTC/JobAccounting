@@ -127,14 +127,14 @@ class OsgScheddCpuHeldFormatter(BaseFormatter):
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
             "Most Common Hold Reason": lambda x: f'<td class="text">{break_camel(x)}</td>',
-            "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Med Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "75% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "95% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
-            "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Med Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "75% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "95% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
+            # "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "CPU Hours / Bad Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Shadw Starts / Job Id":    lambda x: f"<td>{float(x):.2f}</td>",
             "Exec Atts / Shadw Start":  lambda x: f"<td>{float(x):.3f}</td>",
@@ -172,7 +172,7 @@ class OsgScheddCpuHeldFormatter(BaseFormatter):
         custom_items["Exec Atts / Shadw Start"] = "Num Exec Atts per Num Shadw Starts"
         custom_items["Holds / Job Id"] = "Num Job Holds per Num Uniq Job Ids"
 
-        custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
+        # custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
 
         custom_items["Avg MB Sent"] = "Mean MB sent to a job sandbox from a submit point"
         custom_items["Avg MB Recv"] = "Mean MB sent to a submit point from a job sandbox"
