@@ -1,5 +1,6 @@
 from .BaseFormatter import BaseFormatter
 from .OsgScheddCpuFormatter import OsgScheddCpuFormatter
+from .OsgScheddResourcesFormatter import OsgScheddResourcesFormatter
 from .OsgScheddCpuHeldFormatter import OsgScheddCpuHeldFormatter
 from .OsgScheddCpuRemovedFormatter import OsgScheddCpuRemovedFormatter
 from .OsgScheddGpuFormatter import OsgScheddGpuFormatter
