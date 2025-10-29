@@ -145,6 +145,35 @@ def get_vacate_reasons(
     return vacate_reasons
 
 
+@lru_cache(maxsize=1)
+def get_vacate_reasons_pre_execution(
+        client: elasticsearch.Elasticsearch,
+        index: str
+    ) -> set:
+
+    index_mappings = client.indices.get_field_mapping(
+        index=index,
+        fields="NumVacatesByReasonPreExecution.*",
+    )
+
+    vacate_reasons_sets = [set(index_mapping["mappings"].keys()) for index_mapping in index_mappings.values() if index_mapping["mappings"]]
+    vacate_reasons = set()
+    for vacate_reasons_set in vacate_reasons_sets:
+        vacate_reasons = vacate_reasons | vacate_reasons_set
+
+    # {NumVacatesByReasonPreExecution.TransferInputError, NumVacatesByReasonPreExecution.TransferOutputError, ...}
+
+    remove_reasons = set()
+    for vacate_reason in vacate_reasons:
+        if vacate_reason.startswith("NumVacatesByReasonPreExecution.TransferInputError") and len(vacate_reason) > len("NumVacatesByReasonPreExecution.TransferInputError"):
+            remove_reasons.add(vacate_reason)
+        elif vacate_reason.startswith("NumVacatesByReasonPreExecution.TransferOutputError") and len(vacate_reason) > len("NumVacatesByReasonPreExecution.TransferOutputError"):
+            remove_reasons.add(vacate_reason)
+    vacate_reasons = vacate_reasons - remove_reasons
+
+    return vacate_reasons
+
+
 def get_query(
         client: elasticsearch.Elasticsearch,
         index: str,
@@ -161,11 +190,11 @@ def get_query(
                 .query(~Q("terms", JobUniverse=[7, 12]))
 
     # filter out jobs that did not run in the OSPool
-    is_ospool_ap_job = \
+    is_ospool_job = \
         Q("wildcard", ScheddName__keyword="*.osg-htc.org") | \
-        Q("terms", ScheddName__keyword=["comses.sol.rc.asu.edu", "huxley-osgsub-001.sdmz.amnh.org", "osg-solid.jlab.org", "ospool-eht.chtc.wisc.edu", "scott.grid.uchicago.edu"]) | \
+        Q("terms", ScheddName__keyword=["amundsen.grid.uchicago.edu", "comses.sol.rc.asu.edu", "huxley-osgsub-001.sdmz.amnh.org", "osg-moller.jlab.org", "grid-submitter.icecube.wisc.edu", "osg-solid.jlab.org", "ospool-eht.chtc.wisc.edu", "scott.grid.uchicago.edu"]) | \
         Q("terms", LastRemotePool__keyword=["cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"])
-    query = query.query(is_ospool_ap_job)
+    query = query.query(is_ospool_job)
 
     shadow_starts_agg = A(
         "sum",
@@ -181,6 +210,11 @@ def get_query(
         "terms",
         field="CondorVersion.keyword",
         size=16,
+    )
+
+    num_vacates_pre_execution_agg = A(
+        "sum",
+        field="NumVacatesPreExecution",
     )
 
     # resource_name_agg = A(
@@ -200,6 +234,7 @@ def get_query(
     ap_name_agg.metric("shadow_starts", shadow_starts_agg)
     ap_name_agg.metric("job_starts", job_starts_agg)
     ap_name_agg.bucket("condor_version", condor_version_agg)
+    ap_name_agg.metric("num_vacates_pre_execution", num_vacates_pre_execution_agg)
 
     for vacate_reason in get_vacate_reasons(client, index):
         vacate_reason_agg = A("sum", field=vacate_reason)
@@ -207,10 +242,16 @@ def get_query(
         ap_name_agg.metric(vacate_reason, vacate_reason_agg)
         query.aggs.metric(vacate_reason, vacate_reason_agg)
 
+    for vacate_reason in get_vacate_reasons_pre_execution(client, index):
+        vacate_reason_pre_execution_agg = A("sum", field=vacate_reason)
+        ap_name_agg.metric(vacate_reason, vacate_reason_pre_execution_agg)
+        query.aggs.metric(vacate_reason, vacate_reason_pre_execution_agg)
+
     query.aggs.metric("shadow_starts", shadow_starts_agg)
     query.aggs.metric("job_starts", job_starts_agg)
     # query.aggs.bucket("resource_name", resource_name_agg)
     query.aggs.bucket("ap_name", ap_name_agg)
+    query.aggs.metric("num_vacates_pre_execution", num_vacates_pre_execution_agg)
 
     return query
 
@@ -296,6 +337,7 @@ def main():
     ap_name_data = convert_buckets_to_dict(result.aggregations.ap_name.buckets)
 
     vacate_reasons = get_vacate_reasons(es, index)
+    vacate_reasons_pre_execution = get_vacate_reasons_pre_execution(es, index)
 
     # resource_name_metrics = []
     # for resource_name, d in resource_name_data.items():
@@ -326,6 +368,9 @@ def main():
             "% Shadows w/o Exec": 1 - d["job_starts"] / max(d["shadow_starts"], 1),
             "Most Common Vacate Reason": "None",
             "% MCVR": 0,
+            "Vacates Pre Execution": d["num_vacates_pre_execution"],
+            "Most Common Vacate Reason Pre Execution": "None",
+            "% MCVRPE": 0,
         }
         if tuple(int(x) for x in metrics["Version"].split(".")) >= (24, 11, 1):
             if d["shadow_starts"] > d["job_starts"]:
@@ -334,6 +379,13 @@ def main():
                 metrics["% MCVR"] = max_vacate_reason_n / max(d["shadow_starts"], 1)
         else:
             metrics["Most Common Vacate Reason"] = "-"
+        if tuple(int(x) for x in metrics["Version"].split(".")) >= (25, 3, 0):
+            if d["num_vacates_pre_execution"] > 0:
+                max_vacate_reason_pre_execution, max_vacate_reason_pre_execution_n = max({vr: d[vr] for vr in vacate_reasons_pre_execution}.items(), key=itemgetter(1))
+                metrics["Most Common Vacate Reason Pre Execution"] = max_vacate_reason_pre_execution.split(".", maxsplit=1)[-1]
+                metrics["% MCVRPE"] = max_vacate_reason_pre_execution_n / max(d["shadow_starts"], 1)
+        else:
+            metrics["Most Common Vacate Reason Pre Execution"] = "-"
         ap_name_metrics.append(metrics)
     ap_name_metrics.sort(key=itemgetter("Jobs"), reverse=True)
 
@@ -359,6 +411,12 @@ def main():
         text.append(f"""{m['Name']:<22.22} {m['% Shadows w/o Exec']:>6.1%} {m['Jobs']:>9,d} {m['Version']:<8} {m['Most Common Vacate Reason']:<24.24} {f'{m["% MCVR"]:>6.1%}' if m['Most Common Vacate Reason'] != "-" else ''}""")
     text.append("")
 
+    text.append(f"{'AP':<22} {'%SnE':>6} {'Jobs':>9} {'Version':<8} {'Most Common VPE Reason':<23} {'%Shdws':>7}")
+    text.append(80*"-")
+    for m in ap_name_metrics:
+        text.append(f"""{m['Name']:<22.22} {m['% Shadows w/o Exec']:>6.1%} {m['Jobs']:>9,d} {m['Version']:<8} {m['Most Common Vacate Reason Pre Execution']:<24.24} {f'{m["% MCVRPE"]:>6.1%}' if m['Most Common Vacate Reason Pre Execution'] != "-" else ''}""")
+    text.append("")
+
     # text.append(f"{'GLIDEIN_ResourceName':<22} {'%SnE':>6} {'Jobs':>9} {'':<8} {'Most Common Reason':<24} {'% Shdws':>6}")
     # text.append(80*"-")
     # for m in resource_name_metrics:
@@ -370,8 +428,9 @@ def main():
     text.append("\tJobs: Number of completed jobs (i.e. that hit the history file)")
     text.append("\tVersion: Latest version at submit time found for any job on this AP")
     text.append("\tMost Common Vac Reason: Most common vacate reason across all shadows")
-    text.append("\t%Shdws: Percent of all shadows that vacated for the most common reason")
-    text.append('\t"-": All jobs were submitted pre-24.11.1 and have no NumVacateReasons')
+    text.append("\tMost Common VPE Reason: Most common vacate reason pre execution across all shadows")
+    text.append("\t%Shdws: Percent of all shadows that vacated (total or pre execution) for the most common reason")
+    text.append('\t"-": All jobs were submitted pre-24.11.1/25.3.0 and have no NumVacateReasons/PreExecution')
 
     lr = "\n"
     html = f'''<!DOCTYPE html>
