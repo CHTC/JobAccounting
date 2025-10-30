@@ -112,6 +112,14 @@ class OsgScheddResourcesFormatter(BaseFormatter):
             "Max Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
             "Mean Req Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
             "Stdv Req Mem":    lambda x: f"<td>{float(x):.1f}</td>",
+            "Min Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "25% Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Med Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "75% Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "95% Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Max Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Mean Util% Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
+            "Stdv Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>",
             "Min Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
             "25% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
             "Med Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
@@ -135,6 +143,8 @@ class OsgScheddResourcesFormatter(BaseFormatter):
         custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for"
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Req Mem"] = "Final execution memory request in GB"
+
+        custom_items["Min/25%/Median/75%/Max/Mean/Std Util% Mem"] = r"Final execution memory utility (% used/requested)"
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Use Mem"] = "Final execution memory usage in GB"
 

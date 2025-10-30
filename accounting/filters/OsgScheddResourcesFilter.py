@@ -43,14 +43,25 @@ DEFAULT_COLUMNS = {
 
     300: "&nbsp;",
 
-    310: "Min Use Mem",
-    320: "25% Use Mem",
-    330: "Med Use Mem",
-    340: "75% Use Mem",
-    345: "95% Use Mem",
-    350: "Max Use Mem",
-    360: "Mean Use Mem",
-    370: "Stdv Use Mem",
+    310: "Min Util% Mem",
+    320: "25% Util% Mem",
+    330: "Med Util% Mem",
+    340: "75% Util% Mem",
+    345: "95% Util% Mem",
+    350: "Max Util% Mem",
+    360: "Mean Util% Mem",
+    370: "Stdv Util% Mem",
+
+    400: "&nbsp;",
+
+    410: "Min Use Mem",
+    420: "25% Use Mem",
+    430: "Med Use Mem",
+    440: "75% Use Mem",
+    445: "95% Use Mem",
+    450: "Max Use Mem",
+    460: "Mean Use Mem",
+    470: "Stdv Use Mem",
 }
 
 
@@ -932,6 +943,25 @@ class OsgScheddResourcesFilter(BaseFilter):
         else:
             # There is no variance if there is only one value
             row["Stdv Req Mem"] = 0
+
+        memory_utility_sorted = self.clean([100*x/y if ((None not in (x, y,)) and (y > 0)) else None for x, y in zip(data['MemoryUsage'], data['RequestMemory'])])
+        memory_utility_sorted.sort()
+        if len(memory_utility_sorted) > 0:
+            row["Min Util% Mem"]  = memory_utility_sorted[ 0]
+            row["25% Util% Mem"]  = memory_utility_sorted[  len(memory_utility_sorted)//4]
+            row["Med Util% Mem"]  = stats.median(memory_utility_sorted)
+            row["75% Util% Mem"]  = memory_utility_sorted[3*len(memory_utility_sorted)//4]
+            row["95% Util% Mem"]  = memory_utility_sorted[int(0.95*len(memory_utility_sorted))]
+            row["Max Util% Mem"]  = memory_utility_sorted[-1]
+            row["Mean Util% Mem"] = stats.mean(memory_utility_sorted)
+        else:
+            for col in [f"{x} Util% Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+                row[col] = 0
+        if len(memory_utility_sorted) > 1:
+            row["Stdv Util% Mem"] = stats.stdev(memory_utility_sorted)
+        else:
+            # There is no variance if there is only one value
+            row["Stdv Util% Mem"] = 0
 
         memory_usages_sorted = self.clean(data['MemoryUsage'])
         memory_usages_sorted.sort()
