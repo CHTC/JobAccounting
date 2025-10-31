@@ -93,6 +93,10 @@ class OsgScheddResourcesFormatter(BaseFormatter):
         return super().get_table_html(table_file, report_period, start_ts, end_ts, **kwargs)
 
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
+        memory_distro_fmt = lambda x: f"<td>{float(x):,.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>"
+        memory_stdv_fmt = lambda x: f"<td>{float(x):,.0f}</td>"
+        distros = ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]
+        memory_cols = ["Req Mem", "Use Mem", "Util% Mem", "Req Mem GBh", "Use Mem GBh"]
         custom_fmts = {
             "&nbsp;": lambda x: '<td style="background-color: #ddd"></td>',
             "PI Institution": lambda x: f'<td class="text">{compact_institution(x)}</td>',
@@ -104,32 +108,13 @@ class OsgScheddResourcesFormatter(BaseFormatter):
             "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
             "Stdv Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Min Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "25% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Med Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "75% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "95% Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Max Req Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Mean Req Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Stdv Req Mem":    lambda x: f"<td>{float(x):.1f}</td>",
-            "Min Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "25% Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Med Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "75% Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "95% Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Max Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Mean Util% Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Stdv Util% Mem":    lambda x: f"<td>{float(x):.0f}</td>",
-            "Min Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "25% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Med Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "75% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "95% Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Max Use Mem":    lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Mean Use Mem":   lambda x: f"<td>{float(x):.0f}</td>" if float(x) >= 1 else "<td>&lt;</td>",
-            "Stdv Use Mem":    lambda x: f"<td>{float(x):.1f}</td>",
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
         }
+        for memory_col in memory_cols:
+            for distro in distros:
+                custom_fmts[f"{distro} {memory_col}"] = memory_distro_fmt
+            custom_fmts[f"Stdv {memory_col}"] = memory_stdv_fmt
+
         return super().format_rows(header, rows, custom_fmts=custom_fmts, default_text_fmt=default_text_fmt, default_numeric_fmt=default_numeric_fmt)
 
     def get_legend(self):
@@ -137,6 +122,7 @@ class OsgScheddResourcesFormatter(BaseFormatter):
         custom_items["Num Site Instns"]  = "Number of unique institutions that the jobs ran at"
         custom_items["Num Sites"]        = "Number of unique sites that the jobs ran at"
         custom_items["Num Uniq Job Ids"] = "Number of unique job ids across all execution attempts"
+        custom_items["Total Req Mem GBh"] = "Total allocated memory time of all jobs, in GB-hours"
 
         custom_items["% Short Jobs"] = "Percent of Num Uniq Job Ids that were short jobs (<1 minute)"
 
@@ -144,9 +130,13 @@ class OsgScheddResourcesFormatter(BaseFormatter):
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Req Mem"] = "Final execution memory request in GB"
 
+        custom_items["Min/25%/Median/75%/Max/Mean/Std Req Mem GBh"] = "Allocated memory time (using final execution memory request) in GB-hours"
+
         custom_items["Min/25%/Median/75%/Max/Mean/Std Util% Mem"] = r"Final execution memory utility (% used/requested)"
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Use Mem"] = "Final execution memory usage in GB"
+
+        custom_items["Min/25%/Median/75%/Max/Mean/Std Use Mem GBh"] = "Used memory time (using final execution memory used) in GB-hours"
 
         custom_items["&lt;"] = "Memory request or usage was below 1 GB"
 

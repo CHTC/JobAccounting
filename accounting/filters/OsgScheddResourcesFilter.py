@@ -5,7 +5,7 @@ import statistics as stats
 from datetime import date
 from pathlib import Path
 from .BaseFilter import BaseFilter
-from accounting.functions import get_topology_project_data, get_topology_resource_data, get_institution_database
+# from accounting.functions import get_topology_project_data, get_topology_resource_data, get_institution_database
 
 try:
     import htcondor2 as htcondor
@@ -18,17 +18,9 @@ except ImportError:
         raise
 
 DEFAULT_COLUMNS = {
-    15: "Num Uniq Job Ids",
+    # 15: "Num Uniq Job Ids",
+    30: "Total Req Mem GBh",
     60: "% Short Jobs",
-
-    110: "Min Hrs",
-    120: "25% Hrs",
-    130: "Med Hrs",
-    140: "75% Hrs",
-    145: "95% Hrs",
-    150: "Max Hrs",
-    160: "Mean Hrs",
-    170: "Stdv Hrs",
 
     200: "&nbsp;",
 
@@ -54,14 +46,47 @@ DEFAULT_COLUMNS = {
 
     400: "&nbsp;",
 
-    410: "Min Use Mem",
-    420: "25% Use Mem",
-    430: "Med Use Mem",
-    440: "75% Use Mem",
-    445: "95% Use Mem",
-    450: "Max Use Mem",
-    460: "Mean Use Mem",
-    470: "Stdv Use Mem",
+    410: "Min Req Mem GBh",
+    420: "25% Req Mem GBh",
+    430: "Med Req Mem GBh",
+    440: "75% Req Mem GBh",
+    445: "95% Req Mem GBh",
+    450: "Max Req Mem GBh",
+    460: "Mean Req Mem GBh",
+    470: "Stdv Req Mem GBh",
+
+    500: "&nbsp;",
+
+    510: "Min Use Mem",
+    520: "25% Use Mem",
+    530: "Med Use Mem",
+    540: "75% Use Mem",
+    545: "95% Use Mem",
+    550: "Max Use Mem",
+    560: "Mean Use Mem",
+    570: "Stdv Use Mem",
+
+    600: "&nbsp;",
+
+    610: "Min Use Mem GBh",
+    620: "25% Use Mem GBh",
+    630: "Med Use Mem GBh",
+    640: "75% Use Mem GBh",
+    645: "95% Use Mem GBh",
+    650: "Max Use Mem GBh",
+    660: "Mean Use Mem GBh",
+    670: "Stdv Use Mem GBh",
+
+    1000: "&nbsp;",
+
+    1110: "Min Hrs",
+    1120: "25% Hrs",
+    1130: "Med Hrs",
+    1140: "75% Hrs",
+    1145: "95% Hrs",
+    1150: "Max Hrs",
+    1160: "Mean Hrs",
+    1170: "Stdv Hrs",
 }
 
 
@@ -78,8 +103,8 @@ DEFAULT_FILTER_ATTRS = [
 ]
 
 
-INSTITUTION_DB = get_institution_database()
-RESOURCE_DATA = get_topology_resource_data()
+# INSTITUTION_DB = get_institution_database()
+# RESOURCE_DATA = get_topology_resource_data()
 
 
 class OsgScheddResourcesFilter(BaseFilter):
@@ -99,8 +124,8 @@ class OsgScheddResourcesFilter(BaseFilter):
         if kwargs.get("report_period") == "daily" and date.today().weekday() == 0:
             self.schedd_collector_host_map_checked = set()
         super().__init__(**kwargs)
-        self.sort_col = "Num Uniq Job Ids"
-        self.topology_project_map = get_topology_project_data()
+        self.sort_col = "Total Req Mem GBh"
+        # self.topology_project_map = get_topology_project_data()
 
 
     def schedd_collector_host(self, schedd):
@@ -370,19 +395,19 @@ class OsgScheddResourcesFilter(BaseFilter):
 
         # Add custom attrs to the list of attrs
         filter_attrs = DEFAULT_FILTER_ATTRS.copy()
-        filter_attrs = filter_attrs + ["User"]
+        # filter_attrs = filter_attrs + ["User"]
 
         # Get list of sites and institutions this user has run at
-        resource = i.get("MachineAttrGLIDEIN_ResourceName0", i.get("MATCH_EXP_JOBGLIDEIN_ResourceName"))
-        if (resource is None) or (not resource):
-            institution = "UNKNOWN"
-        elif "MachineAttrOSG_INSTITUTION_ID0" in i:
-            osg_id_short = (i.get("MachineAttrOSG_INSTITUTION_ID0") or "").split("_")[-1]
-            institution = INSTITUTION_DB.get(osg_id_short, {}).get("name", "UNKNOWN")
-        else:
-            institution = RESOURCE_DATA.get(resource.lower(), {}).get("institution", "UNKNOWN")
-        o["_Institutions"].append(institution)
-        o["_Sites"].append(resource)
+        # resource = i.get("MachineAttrGLIDEIN_ResourceName0", i.get("MATCH_EXP_JOBGLIDEIN_ResourceName"))
+        # if (resource is None) or (not resource):
+        #     institution = "UNKNOWN"
+        # elif "MachineAttrOSG_INSTITUTION_ID0" in i:
+        #     osg_id_short = (i.get("MachineAttrOSG_INSTITUTION_ID0") or "").split("_")[-1]
+        #     institution = INSTITUTION_DB.get(osg_id_short, {}).get("name", "UNKNOWN")
+        # else:
+        #     institution = RESOURCE_DATA.get(resource.lower(), {}).get("institution", "UNKNOWN")
+        # o["_Institutions"].append(institution)
+        # o["_Sites"].append(resource)
 
         # Count number of history ads (i.e. number of unique job ids)
         o["_NumJobs"].append(1)
@@ -460,11 +485,11 @@ class OsgScheddResourcesFilter(BaseFilter):
         if agg == "Users":
             columns[4] = "Most Used Project"
             columns[175] = "Most Used Schedd"
-        if agg == "Projects":
-            columns[4] = "PI Institution"
-            columns[10] = "Num Users"
-            columns[11] = "Num Site Instns"
-            columns[12] = "Num Sites"
+        # if agg == "Projects":
+        #     columns[4] = "PI Institution"
+        #     columns[10] = "Num Users"
+        #     columns[11] = "Num Site Instns"
+        #     columns[12] = "Num Sites"
         if agg == "Institution":
             columns[10] = "Num Sites"
             columns[11] = "Num Users"
@@ -963,6 +988,26 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Util% Mem"] = 0
 
+        memory_hours_requested_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["RequestMemory"], data["RemoteWallClockTime"])])
+        row["Total Req Mem GBh"] = sum(memory_hours_requested_sorted) / (1024*3600)
+        memory_hours_requested_sorted.sort()
+        if len(memory_hours_requested_sorted) > 0:
+            row["Min Req Mem GBh"]  = memory_hours_requested_sorted[ 0] / (1024*3600)
+            row["25% Req Mem GBh"]  = memory_hours_requested_sorted[  len(memory_hours_requested_sorted)//4] / (1024*3600)
+            row["Med Req Mem GBh"]  = stats.median(memory_hours_requested_sorted) / (1024*3600)
+            row["75% Req Mem GBh"]  = memory_hours_requested_sorted[3*len(memory_hours_requested_sorted)//4] / (1024*3600)
+            row["95% Req Mem GBh"]  = memory_hours_requested_sorted[int(0.95*len(memory_hours_requested_sorted))] / (1024*3600)
+            row["Max Req Mem GBh"]  = memory_hours_requested_sorted[-1] / (1024*3600)
+            row["Mean Req Mem GBh"] = stats.mean(memory_hours_requested_sorted) / (1024*3600)
+        else:
+            for col in [f"{x} Req Mem GBh" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+                row[col] = 0
+        if len(memory_hours_requested_sorted) > 1:
+            row["Stdv Req Mem GBh"] = stats.stdev(memory_hours_requested_sorted) / (1024*3600)
+        else:
+            # There is no variance if there is only one value
+            row["Stdv Req Mem GBh"] = 0
+
         memory_usages_sorted = self.clean(data['MemoryUsage'])
         memory_usages_sorted.sort()
         if len(memory_usages_sorted) > 0:
@@ -981,6 +1026,25 @@ class OsgScheddResourcesFilter(BaseFilter):
         else:
             # There is no variance if there is only one value
             row["Stdv Use Mem"] = 0
+
+        memory_hours_usages_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["MemoryUsage"], data["RemoteWallClockTime"])])
+        memory_hours_usages_sorted.sort()
+        if len(memory_hours_usages_sorted) > 0:
+            row["Min Use Mem GBh"]  = memory_hours_usages_sorted[ 0] / (1024*3600)
+            row["25% Use Mem GBh"]  = memory_hours_usages_sorted[  len(memory_hours_usages_sorted)//4] / (1024*3600)
+            row["Med Use Mem GBh"]  = stats.median(memory_hours_usages_sorted) / (1024*3600)
+            row["75% Use Mem GBh"]  = memory_hours_usages_sorted[3*len(memory_hours_usages_sorted)//4] / (1024*3600)
+            row["95% Use Mem GBh"]  = memory_hours_usages_sorted[int(0.95*len(memory_hours_usages_sorted))] / (1024*3600)
+            row["Max Use Mem GBh"]  = memory_hours_usages_sorted[-1] / (1024*3600)
+            row["Mean Use Mem GBh"] = stats.mean(memory_hours_usages_sorted) / (1024*3600)
+        else:
+            for col in [f"{x} Use Mem GBh" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+                row[col] = 0
+        if len(memory_hours_usages_sorted) > 1:
+            row["Stdv Use Mem GBh"] = stats.stdev(memory_hours_usages_sorted) / (1024*3600)
+        else:
+            # There is no variance if there is only one value
+            row["Stdv Use Mem GBh"] = 0
 
         # # Compute job unit metrics
         # row["Med Job Units"] = stats.median(self.clean(data["NumJobUnits"], allow_empty_list=False))
@@ -1006,14 +1070,14 @@ class OsgScheddResourcesFilter(BaseFilter):
                 row["Most Used Schedd"] = max(set(schedds), key=schedds.count)
             else:
                 row["Most Used Schedd"] = "UNKNOWN"
-        if agg == "Projects":
-            row["Num Users"] = len(set(data["User"]))
-            row["Num Site Instns"] = len(set(data["_Institutions"]))
-            row["Num Sites"] = len(set(data["_Sites"]))
-            if agg_name != "TOTAL":
-                project_map = self.topology_project_map.get(agg_name.lower(), self.topology_project_map["UNKNOWN"])
-                row["PI Institution"] = project_map["institution"]
-            else:
-                row["PI Institution"] = ""
+        # if agg == "Projects":
+        #     row["Num Users"] = len(set(data["User"]))
+        #     row["Num Site Instns"] = len(set(data["_Institutions"]))
+        #     row["Num Sites"] = len(set(data["_Sites"]))
+        #     if agg_name != "TOTAL":
+        #         project_map = self.topology_project_map.get(agg_name.lower(), self.topology_project_map["UNKNOWN"])
+        #         row["PI Institution"] = project_map["institution"]
+        #     else:
+        #         row["PI Institution"] = ""
 
         return row
