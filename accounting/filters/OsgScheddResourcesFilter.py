@@ -18,42 +18,53 @@ except ImportError:
         raise
 
 DEFAULT_COLUMNS = {
-    # 15: "Num Uniq Job Ids",
-    30: "Total Req Mem GBh",
-    60: "% Short Jobs",
+    25: "Total Unuse Mem GBh",
+    30: "Total Mem GBh Util%",
+    35: "Total Req Mem GBh",
+
+    100: "&nbsp;",
+
+    110: "Min Util% Mem",
+    120: "25% Util% Mem",
+    130: "Med Util% Mem",
+    140: "75% Util% Mem",
+    145: "95% Util% Mem",
+    150: "Max Util% Mem",
+    160: "Mean Util% Mem",
+    170: "Stdv Util% Mem",
 
     200: "&nbsp;",
 
-    210: "Min Req Mem",
-    220: "25% Req Mem",
-    230: "Med Req Mem",
-    240: "75% Req Mem",
-    245: "95% Req Mem",
-    250: "Max Req Mem",
-    260: "Mean Req Mem",
-    270: "Stdv Req Mem",
+    210: "Min Req Mem GBh",
+    220: "25% Req Mem GBh",
+    230: "Med Req Mem GBh",
+    240: "75% Req Mem GBh",
+    245: "95% Req Mem GBh",
+    250: "Max Req Mem GBh",
+    260: "Mean Req Mem GBh",
+    270: "Stdv Req Mem GBh",
 
     300: "&nbsp;",
 
-    310: "Min Util% Mem",
-    320: "25% Util% Mem",
-    330: "Med Util% Mem",
-    340: "75% Util% Mem",
-    345: "95% Util% Mem",
-    350: "Max Util% Mem",
-    360: "Mean Util% Mem",
-    370: "Stdv Util% Mem",
+    310: "Min Unuse Mem GBh",
+    320: "25% Unuse Mem GBh",
+    330: "Med Unuse Mem GBh",
+    340: "75% Unuse Mem GBh",
+    345: "95% Unuse Mem GBh",
+    350: "Max Unuse Mem GBh",
+    360: "Mean Unuse Mem GBh",
+    370: "Stdv Unuse Mem GBh",
 
     400: "&nbsp;",
 
-    410: "Min Req Mem GBh",
-    420: "25% Req Mem GBh",
-    430: "Med Req Mem GBh",
-    440: "75% Req Mem GBh",
-    445: "95% Req Mem GBh",
-    450: "Max Req Mem GBh",
-    460: "Mean Req Mem GBh",
-    470: "Stdv Req Mem GBh",
+    410: "Min Req Mem",
+    420: "25% Req Mem",
+    430: "Med Req Mem",
+    440: "75% Req Mem",
+    445: "95% Req Mem",
+    450: "Max Req Mem",
+    460: "Mean Req Mem",
+    470: "Stdv Req Mem",
 
     500: "&nbsp;",
 
@@ -66,19 +77,9 @@ DEFAULT_COLUMNS = {
     560: "Mean Use Mem",
     570: "Stdv Use Mem",
 
-    600: "&nbsp;",
-
-    610: "Min Use Mem GBh",
-    620: "25% Use Mem GBh",
-    630: "Med Use Mem GBh",
-    640: "75% Use Mem GBh",
-    645: "95% Use Mem GBh",
-    650: "Max Use Mem GBh",
-    660: "Mean Use Mem GBh",
-    670: "Stdv Use Mem GBh",
-
     1000: "&nbsp;",
 
+    1105: "% Short Jobs",
     1110: "Min Hrs",
     1120: "25% Hrs",
     1130: "Med Hrs",
@@ -124,7 +125,7 @@ class OsgScheddResourcesFilter(BaseFilter):
         if kwargs.get("report_period") == "daily" and date.today().weekday() == 0:
             self.schedd_collector_host_map_checked = set()
         super().__init__(**kwargs)
-        self.sort_col = "Total Req Mem GBh"
+        self.sort_col = "Total Unuse Mem GBh"
         # self.topology_project_map = get_topology_project_data()
 
 
@@ -482,19 +483,19 @@ class OsgScheddResourcesFilter(BaseFilter):
     def add_custom_columns(self, agg):
         # Add Project and Schedd columns to the Users table
         columns = DEFAULT_COLUMNS.copy()
-        if agg == "Users":
-            columns[4] = "Most Used Project"
-            columns[175] = "Most Used Schedd"
+        # if agg == "Users":
+        #     columns[4] = "Most Used Project"
+        #     columns[175] = "Most Used Schedd"
         # if agg == "Projects":
         #     columns[4] = "PI Institution"
         #     columns[10] = "Num Users"
         #     columns[11] = "Num Site Instns"
         #     columns[12] = "Num Sites"
-        if agg == "Institution":
-            columns[10] = "Num Sites"
-            columns[11] = "Num Users"
-            # rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,325,330,340,350,355,390,600,610,620,630,640]
-            [columns.pop(key) for key in rm_columns if key in columns]
+        # if agg == "Institution":
+        #     columns[10] = "Num Sites"
+        #     columns[11] = "Num Users"
+        #     # rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,325,330,340,350,355,390,600,610,620,630,640]
+        #     [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
     def merge_filtered_data(self, data, agg):
@@ -647,15 +648,6 @@ class OsgScheddResourcesFilter(BaseFilter):
         # Output dictionary
         row = {"&nbsp;": ""}
 
-        # Don't count starts and shadows for jobs that don't/shouldn't have shadows
-        # num_exec_attempts = []
-        # num_shadow_starts = []
-        # for (job_starts, shadow_starts) in zip(
-        #         data["NumJobStarts"],
-        #         data["NumShadowStarts"]):
-        #     num_exec_attempts.append(job_starts)
-        #     num_shadow_starts.append(shadow_starts)
-
         # Short jobs are jobs that ran for < 1 minute
         is_short_job = []
         for (goodput_time, record_date, start_date) in zip(
@@ -683,256 +675,17 @@ class OsgScheddResourcesFilter(BaseFilter):
         long_times_sorted = self.clean(long_times_sorted)
         long_times_sorted.sort()
 
-        # File transfer stats
-        # input_files_total_count = []
-        # input_files_total_bytes = []
-        # input_files_total_job_starts = []
-        # output_files_total_count = []
-        # output_files_total_bytes = []
-        # output_files_total_job_stops = []
-        # osdf_files_count = 0
-        # osdf_bytes_total = 0
-        # for (
-        #         job_status,
-        #         job_starts,
-        #         input_stats,
-        #         input_cedar_bytes,
-        #         output_stats,
-        #         output_cedar_bytes,
-        #     ) in zip(
-        #         data["JobStatus"],
-        #         data["NumJobStarts"],
-        #         data["TransferInputStats"],
-        #         data["BytesRecvd"],
-        #         data["TransferOutputStats"],
-        #         data["BytesSent"],
-        #     ):
-
-        #     input_files_count = 0
-        #     input_files_bytes = 0
-        #     if input_stats is None:
-        #         input_files_total_count.append(None)
-        #         input_files_total_job_starts.append(None)
-        #     else:
-        #         got_cedar_bytes = False
-        #         for attr in input_stats:
-        #             if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
-        #                 osdf_files_count += input_stats[attr]
-        #             if attr.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
-        #                 osdf_bytes_total += input_stats[attr]
-        #             if attr.casefold().endswith("FilesCountTotal".casefold()):
-        #                 input_files_count += input_stats[attr]
-        #             elif attr.casefold().endswith("SizeBytesTotal".casefold()):
-        #                 input_files_bytes += input_stats[attr]
-        #                 if attr.casefold() == "CedarSizeBytesTotal".casefold():
-        #                     got_cedar_bytes = True
-        #         if not got_cedar_bytes:
-        #             input_files_bytes += input_cedar_bytes
-        #         input_files_total_count.append(input_files_count)
-        #         input_files_total_bytes.append(input_files_bytes)
-        #         input_files_total_job_starts.append(job_starts)
-
-        #     output_files_count = 0
-        #     output_files_bytes = 0
-        #     if output_stats is None:
-        #         output_files_total_count.append(None)
-        #         output_files_total_job_stops.append(None)
-        #     else:
-        #         got_cedar_bytes = False
-        #         for attr in output_stats:
-        #             if attr.casefold() in {"stashfilescounttotal", "osdffilescounttotal"}:
-        #                 osdf_files_count += output_stats[attr]
-        #             if attr.casefold() in {"stashsizebytestotal", "osdfsizebytestotal"}:
-        #                 osdf_bytes_total += output_stats[attr]
-        #             if attr.casefold().endswith("FilesCountTotal".casefold()):
-        #                 output_files_count += output_stats[attr]
-        #             elif attr.casefold().endswith("SizeBytesTotal".casefold()):
-        #                 output_files_bytes += output_stats[attr]
-        #                 if attr.casefold() == "CedarSizeBytesTotal".casefold():
-        #                     got_cedar_bytes = True
-        #         if not got_cedar_bytes:
-        #             output_files_bytes += output_cedar_bytes
-        #         output_files_total_count.append(output_files_count)
-        #         output_files_total_bytes.append(output_files_bytes)
-        #         output_files_total_job_stops.append(1)
-
-        # # Activation metrics added in 9.4.1
-        # # Added to the OSG Connect access points at 1640100600
-        # activation_durations = []
-        # setup_durations = []
-        # act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
-        # for (start_date, current_start_date, activation_duration, setup_duration) in zip(
-        #         data["JobStartDate"],
-        #         data["JobCurrentStartDate"],
-        #         data["ActivationDuration"],
-        #         data["ActivationSetupDuration"]):
-        #     start_date = current_start_date or start_date
-        #     if None in [start_date, activation_duration, setup_duration]:
-        #         continue
-        #     if ((start_date > act_cutoff_date) and
-        #         (activation_duration < (act_cutoff_date - 24*3600) and
-        #         (setup_duration < (act_cutoff_date - 24*3600)))):
-        #         activation_durations.append(activation_duration)
-        #         setup_durations.append(setup_duration)
-
-        # # NumVacatesByReason added in 24.11.1
-        # num_vacates_by_reason_exists = 0
-        # num_vacates_shadows = 0
-        # num_vacates_transferinputerror = 0
-        # for (
-        #     condor_version,
-        #     num_vacates_by_reason,
-        #     num_shadow_starts_temp,
-        # ) in zip(
-        #     data["CondorVersion"],
-        #     data["NumVacatesByReason"],
-        #     data["NumShadowStarts"],
-        # ):
-        #     if tuple(int(x) for x in condor_version.split()[1].split(".")) < (24, 11, 1):
-        #         continue
-        #     num_vacates_by_reason_exists += 1
-        #     if num_shadow_starts_temp is not None:
-        #         num_vacates_shadows += num_shadow_starts_temp
-        #     if num_vacates_by_reason is not None and "TransferInputError" in num_vacates_by_reason:
-        #         num_vacates_transferinputerror += num_vacates_by_reason["TransferInputError"]
-
         # Compute columns
-        # row["All CPU Hours"]    = sum(self.clean(total_cpu_time)) / 3600
-        # row["Good CPU Hours"]   = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
-        # row["Num DAG Node Jobs"] = sum(data['_NumDAGNodes'])
-        # row["Num Rm'd Jobs"]    = sum([status == 3 for status in data["JobStatus"]])
-        # row["Num Job Holds"]    = sum(self.clean(data["NumHolds"]))
-        # row["Num Jobs w/1+ Holds"] = sum([holds > 0 for holds in self.clean(data["NumHolds"])])
-        # row["Num Jobs Over Rqst Disk"] = sum([(usage or 0) > (request or 1)
-        #     for (usage, request) in zip(data["DiskUsage"], data["RequestDisk"])])
-        # row["Num Jobs w/>1 Exec Att"] = sum([starts > 1 for starts in self.clean(data["NumJobStarts"])])
         row["Num Short Jobs"]   = sum(self.clean(is_short_job))
-        # row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
-        # row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
-        # row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
-        # row["Max Rqst Disk GB"] = max(self.clean(data["RequestDisk"], allow_empty_list=False)) / (1000*1000)
-        # row["Max Used Disk GB"] = max(self.clean(data["DiskUsage"], allow_empty_list=False)) / (1000*1000)
-        # row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
-        # row["Num Job Starts"]    = sum(self.clean(num_exec_attempts))
-        # row["Num Shadow Starts"] = sum(self.clean(num_shadow_starts))
-        # row["Num Ckpt Able Jobs"]  = sum(data["_NumCkptJobs"])
-        # row["Num S'ty Jobs"]       = len(self.clean(data["SingularityImage"]))
 
         # # Compute derivative columns
-        # if row["All CPU Hours"] > 0:
-        #     row["% Good CPU Hours"] = 100 * row["Good CPU Hours"] / row["All CPU Hours"]
-        # else:
-        #     row["% Good CPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
-            # row["Shadw Starts / Job Id"] = row["Num Shadow Starts"] / row["Num Uniq Job Ids"]
-            # row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
-            # row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
-            # row["% Jobs w/>1 Exec Att"] = 100 * row["Num Jobs w/>1 Exec Att"] / row["Num Uniq Job Ids"]
-            # row["% Jobs w/1+ Holds"] = 100 * row["Num Jobs w/1+ Holds"] / row["Num Uniq Job Ids"]
-            # row["% Jobs Over Rqst Disk"] = 100 * row["Num Jobs Over Rqst Disk"] / row["Num Uniq Job Ids"]
-            # row["% Ckpt Able"] = 100 * row["Num Ckpt Able Jobs"] / row["Num Uniq Job Ids"]
-            # row["% Jobs using S'ty"] = 100 * row["Num S'ty Jobs"] / row["Num Uniq Job Ids"]
         else:
-            # row["Shadw Starts / Job Id"] = 0
-            # row["Holds / Job Id"] = 0
-            # row["% Rm'd Jobs"] = 0
             row["% Short Jobs"] = 0
-            # row["% Jobs w/>1 Exec Att"] = 0
-            # row["% Jobs w/1+ Holds"] = 0
-            # row["% Jobs Over Rqst Disk"] = 0
-            # row["% Jobs using S'ty"] = 0
-        # if row["Num Shadow Starts"] > 0:
-        #     row["% Shadw w/o Start"] = 100 * max(row["Num Shadow Starts"] - row["Num Job Starts"], 0) / row["Num Shadow Starts"]
-        #     row["Exec Atts / Shadw Start"] = row["Num Job Starts"] / row["Num Shadow Starts"]
-        # else:
-        #     row["% Shadw w/o Start"] = 0
-        #     row["Exec Atts / Shadw Start"] = 0
-        # if num_vacates_shadows > 0:
-        #     row["% Shadw Input Fail"] = 100 * num_vacates_transferinputerror / num_vacates_shadows
-        # elif num_vacates_by_reason_exists > 0:
-        #     row["% Shadw Input Fail"] = 0
-        # else:
-        #     row["% Shadw Input Fail"] = "-"
-        # if sum(data["_NumBadJobStarts"]) > 0:
-        #     row["CPU Hours / Bad Exec Att"] = (sum(self.clean(badput_cpu_time)) / 3600) / sum(data["_NumBadJobStarts"])
-        # else:
-        #     row["CPU Hours / Bad Exec Att"] = 0
 
-        # row["Num Shadow Starts Post 24.11.1"] = num_vacates_shadows
-        # row["Num TransferInputError"] = num_vacates_transferinputerror
-        # row["Num Jobs Post 24.11.1"] = num_vacates_by_reason_exists
-
-        # # File transfer stats
-        # total_files = 0
-        # total_bytes = 0
-        # if any(input_files_total_job_starts):
-        #     exec_atts = sum(self.clean(input_files_total_job_starts))
-        #     input_files = sum(self.clean(input_files_total_count))
-        #     input_mb = sum(self.clean(input_files_total_bytes)) / 1e6
-
-        #     total_files += input_files
-        #     total_bytes += input_mb * 1e6
-
-        #     row["Total Input Files"] = input_files
-        #     if exec_atts > 0:
-        #         row["Input Files / Exec Att"] = input_files / exec_atts
-        #         row["Input MB / Exec Att"] = input_mb / exec_atts
-        #     if input_files > 0:
-        #         row["Input MB / File"] = input_mb / input_files
-        #         row["Total Files Xferd"] = row.get("Total Files Xferd", 0) + input_files
-
-        # if any(output_files_total_job_stops):
-        #     exec_ends = sum(self.clean(output_files_total_job_stops))
-        #     output_files = sum(self.clean(output_files_total_count))
-        #     output_mb = sum(self.clean(output_files_total_bytes)) / 1e6
-
-        #     total_files += output_files
-        #     total_bytes += output_mb * 1e6
-
-        #     row["Total Ouptut Files"] = output_files
-        #     if exec_ends > 0:
-        #         row["Output Files / Job"] = output_files / exec_ends
-        #         row["Output MB / Job"] = output_mb / exec_ends
-        #     if output_files > 0:
-        #         row["Output MB / File"] = output_mb / output_files
-        #         row["Total Files Xferd"] = row.get("Total Files Xferd", 0) + output_files
-
-        # if osdf_files_count == 0 or osdf_bytes_total == 0:
-        #     condor_versions_set = set(data["CondorVersion"])
-        #     condor_versions_set.discard(None)
-        #     condor_versions_tuples_list = []
-        #     for version in condor_versions_set:
-        #         condor_versions_tuples_list.append(tuple([int(x) for x in version.split()[1].split(".")]))
-        #     if all(condor_version_tuple < (9, 7, 0) for condor_version_tuple in condor_versions_tuples_list):
-        #         row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = "-"
-        #     else:
-        #         row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0
-        # else:
-        #     row["OSDF Files Xferd"] = osdf_files_count or ""
-        #     if osdf_files_count > 0 and osdf_bytes_total > 0 and total_files > 0 and total_bytes > 0:
-        #         row["% OSDF Files"] = 100 * osdf_files_count / total_files
-        #         row["% OSDF Bytes"] = 100 * osdf_bytes_total / total_bytes
-        #     else:
-        #         row["% OSDF Files"] = row["% OSDF Bytes"] = ""
-
-        # # Insert missing value if any missing
-        # for key in ["Total Files Xferd", "Total Input Files", "Total Output Files",
-        #             "Input Files / Exec Att", "Output Files / Job",
-        #             "Input MB / Exec Att", "Output MB / Job",
-        #             "Input MB / File", "Output MB / File"]:
-        #     row[key] = row.get(key, -999)
-
-        # # Compute activation time stats
-        # row["Mean Actv Hrs"] = ""
-        # row["Mean Setup Secs"] = ""
-        # if len(activation_durations) > 0:
-        #     row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
-        # if len(setup_durations) > 0:
-        #     row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
-
-        # Compute time percentiles and stats
+        # Compute percentiles and stats
         if len(long_times_sorted) > 0:
             row["Min Hrs"]  = long_times_sorted[ 0] / 3600
             row["25% Hrs"]  = long_times_sorted[  len(long_times_sorted)//4] / 3600
@@ -969,27 +722,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Req Mem"] = 0
 
-        memory_utility_sorted = self.clean([100*x/y if ((None not in (x, y,)) and (y > 0)) else None for x, y in zip(data['MemoryUsage'], data['RequestMemory'])])
-        memory_utility_sorted.sort()
-        if len(memory_utility_sorted) > 0:
-            row["Min Util% Mem"]  = memory_utility_sorted[ 0]
-            row["25% Util% Mem"]  = memory_utility_sorted[  len(memory_utility_sorted)//4]
-            row["Med Util% Mem"]  = stats.median(memory_utility_sorted)
-            row["75% Util% Mem"]  = memory_utility_sorted[3*len(memory_utility_sorted)//4]
-            row["95% Util% Mem"]  = memory_utility_sorted[int(0.95*len(memory_utility_sorted))]
-            row["Max Util% Mem"]  = memory_utility_sorted[-1]
-            row["Mean Util% Mem"] = stats.mean(memory_utility_sorted)
-        else:
-            for col in [f"{x} Util% Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
-                row[col] = 0
-        if len(memory_utility_sorted) > 1:
-            row["Stdv Util% Mem"] = stats.stdev(memory_utility_sorted)
-        else:
-            # There is no variance if there is only one value
-            row["Stdv Util% Mem"] = 0
-
         memory_hours_requested_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["RequestMemory"], data["RemoteWallClockTime"])])
-        row["Total Req Mem GBh"] = sum(memory_hours_requested_sorted) / (1024*3600)
         memory_hours_requested_sorted.sort()
         if len(memory_hours_requested_sorted) > 0:
             row["Min Req Mem GBh"]  = memory_hours_requested_sorted[ 0] / (1024*3600)
@@ -1029,47 +762,98 @@ class OsgScheddResourcesFilter(BaseFilter):
 
         memory_hours_usages_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["MemoryUsage"], data["RemoteWallClockTime"])])
         memory_hours_usages_sorted.sort()
-        if len(memory_hours_usages_sorted) > 0:
-            row["Min Use Mem GBh"]  = memory_hours_usages_sorted[ 0] / (1024*3600)
-            row["25% Use Mem GBh"]  = memory_hours_usages_sorted[  len(memory_hours_usages_sorted)//4] / (1024*3600)
-            row["Med Use Mem GBh"]  = stats.median(memory_hours_usages_sorted) / (1024*3600)
-            row["75% Use Mem GBh"]  = memory_hours_usages_sorted[3*len(memory_hours_usages_sorted)//4] / (1024*3600)
-            row["95% Use Mem GBh"]  = memory_hours_usages_sorted[int(0.95*len(memory_hours_usages_sorted))] / (1024*3600)
-            row["Max Use Mem GBh"]  = memory_hours_usages_sorted[-1] / (1024*3600)
-            row["Mean Use Mem GBh"] = stats.mean(memory_hours_usages_sorted) / (1024*3600)
+        # if len(memory_hours_usages_sorted) > 0:
+        #     row["Min Use Mem GBh"]  = memory_hours_usages_sorted[ 0] / (1024*3600)
+        #     row["25% Use Mem GBh"]  = memory_hours_usages_sorted[  len(memory_hours_usages_sorted)//4] / (1024*3600)
+        #     row["Med Use Mem GBh"]  = stats.median(memory_hours_usages_sorted) / (1024*3600)
+        #     row["75% Use Mem GBh"]  = memory_hours_usages_sorted[3*len(memory_hours_usages_sorted)//4] / (1024*3600)
+        #     row["95% Use Mem GBh"]  = memory_hours_usages_sorted[int(0.95*len(memory_hours_usages_sorted))] / (1024*3600)
+        #     row["Max Use Mem GBh"]  = memory_hours_usages_sorted[-1] / (1024*3600)
+        #     row["Mean Use Mem GBh"] = stats.mean(memory_hours_usages_sorted) / (1024*3600)
+        # else:
+        #     for col in [f"{x} Use Mem GBh" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+        #         row[col] = 0
+        # if len(memory_hours_usages_sorted) > 1:
+        #     row["Stdv Use Mem GBh"] = stats.stdev(memory_hours_usages_sorted) / (1024*3600)
+        # else:
+        #     # There is no variance if there is only one value
+        #     row["Stdv Use Mem GBh"] = 0
+
+        memory_unusages_sorted = self.clean([max(req - use, 0) if (None not in (req, use)) else None for req, use in zip(data["RequestMemory"], data["MemoryUsage"])])
+        memory_unusages_sorted.sort()
+        if len(memory_unusages_sorted) > 0:
+            row["Min Unuse Mem"]  = memory_unusages_sorted[ 0] / 1024
+            row["25% Unuse Mem"]  = memory_unusages_sorted[  len(memory_unusages_sorted)//4] / 1024
+            row["Med Unuse Mem"]  = stats.median(memory_unusages_sorted) / 1024
+            row["75% Unuse Mem"]  = memory_unusages_sorted[3*len(memory_unusages_sorted)//4] / 1024
+            row["95% Unuse Mem"]  = memory_unusages_sorted[int(0.95*len(memory_unusages_sorted))] / 1024
+            row["Max Unuse Mem"]  = memory_unusages_sorted[-1] / 1024
+            row["Mean Unuse Mem"] = stats.mean(memory_unusages_sorted) / 1024
         else:
-            for col in [f"{x} Use Mem GBh" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+            for col in [f"{x} Unuse Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
                 row[col] = 0
-        if len(memory_hours_usages_sorted) > 1:
-            row["Stdv Use Mem GBh"] = stats.stdev(memory_hours_usages_sorted) / (1024*3600)
+        if len(memory_unusages_sorted) > 1:
+            row["Stdv Unuse Mem"] = stats.stdev(memory_unusages_sorted) / 1024
         else:
             # There is no variance if there is only one value
-            row["Stdv Use Mem GBh"] = 0
+            row["Stdv Unuse Mem"] = 0
 
-        # # Compute job unit metrics
-        # row["Med Job Units"] = stats.median(self.clean(data["NumJobUnits"], allow_empty_list=False))
-        # row["Max Job Units"] = max(self.clean(data["NumJobUnits"], allow_empty_list=False))
-        # row["Job Unit Hours"] = sum(
-        #     job_units*wallclocktime/3600 for job_units, wallclocktime in zip(
-        #         data.get("NumJobUnits", []),
-        #         data.get("RemoteWallClockTime", []),
-        #     )
-        #     if job_units is not None
-        # )
+        memory_hours_unusages_sorted = self.clean([max(req - use, 0)*t if (None not in (req, use, t)) else None for req, use, t in zip(data["RequestMemory"], data["MemoryUsage"], data["RemoteWallClockTime"])])
+        memory_hours_unusages_sorted.sort()
+        if len(memory_hours_unusages_sorted) > 0:
+            row["Min Unuse Mem GBh"]  = memory_hours_unusages_sorted[ 0] / (1024*3600)
+            row["25% Unuse Mem GBh"]  = memory_hours_unusages_sorted[  len(memory_hours_unusages_sorted)//4] / (1024*3600)
+            row["Med Unuse Mem GBh"]  = stats.median(memory_hours_unusages_sorted) / (1024*3600)
+            row["75% Unuse Mem GBh"]  = memory_hours_unusages_sorted[3*len(memory_hours_unusages_sorted)//4] / (1024*3600)
+            row["95% Unuse Mem GBh"]  = memory_hours_unusages_sorted[int(0.95*len(memory_hours_unusages_sorted))] / (1024*3600)
+            row["Max Unuse Mem GBh"]  = memory_hours_unusages_sorted[-1] / (1024*3600)
+            row["Mean Unuse Mem GBh"] = stats.mean(memory_hours_unusages_sorted) / (1024*3600)
+        else:
+            for col in [f"{x} Unuse Mem GBh" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+                row[col] = 0
+        if len(memory_hours_unusages_sorted) > 1:
+            row["Stdv Unuse Mem GBh"] = stats.stdev(memory_hours_unusages_sorted) / (1024*3600)
+        else:
+            # There is no variance if there is only one value
+            row["Stdv Unuse Mem GBh"] = 0
+
+        memory_utility_sorted = self.clean([100*x/y if ((None not in (x, y,)) and (y > 0)) else None for x, y in zip(data['MemoryUsage'], data['RequestMemory'])])
+        memory_utility_sorted.sort()
+        if len(memory_utility_sorted) > 0:
+            row["Min Util% Mem"]  = memory_utility_sorted[ 0]
+            row["25% Util% Mem"]  = memory_utility_sorted[  len(memory_utility_sorted)//4]
+            row["Med Util% Mem"]  = stats.median(memory_utility_sorted)
+            row["75% Util% Mem"]  = memory_utility_sorted[3*len(memory_utility_sorted)//4]
+            row["95% Util% Mem"]  = memory_utility_sorted[int(0.95*len(memory_utility_sorted))]
+            row["Max Util% Mem"]  = memory_utility_sorted[-1]
+            row["Mean Util% Mem"] = stats.mean(memory_utility_sorted)
+        else:
+            for col in [f"{x} Util% Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+                row[col] = 0
+        if len(memory_utility_sorted) > 1:
+            row["Stdv Util% Mem"] = stats.stdev(memory_utility_sorted)
+        else:
+            # There is no variance if there is only one value
+            row["Stdv Util% Mem"] = 0
+
+        # Totals that use the metrics generated for the distributions
+        row["Total Unuse Mem GBh"] = sum(memory_hours_unusages_sorted) / (1024*3600)
+        row["Total Mem GBh Util%"] = 100 * sum(memory_hours_usages_sorted) / sum(memory_hours_requested_sorted)
+        row["Total Req Mem GBh"] = sum(memory_hours_requested_sorted) / (1024*3600)
 
         # Compute mode for Project and Schedd columns in the Users table
-        if agg == "Users":
-            projects = self.clean(data["ProjectName"])
-            if len(projects) > 0:
-                row["Most Used Project"] = max(set(projects), key=projects.count)
-            else:
-                row["Most Used Project"] = "UNKNOWN"
+        # if agg == "Users":
+        #     projects = self.clean(data["ProjectName"])
+        #     if len(projects) > 0:
+        #         row["Most Used Project"] = max(set(projects), key=projects.count)
+        #     else:
+        #         row["Most Used Project"] = "UNKNOWN"
 
-            schedds = self.clean(data["ScheddName"])
-            if len(schedds) > 0:
-                row["Most Used Schedd"] = max(set(schedds), key=schedds.count)
-            else:
-                row["Most Used Schedd"] = "UNKNOWN"
+        #     schedds = self.clean(data["ScheddName"])
+        #     if len(schedds) > 0:
+        #         row["Most Used Schedd"] = max(set(schedds), key=schedds.count)
+        #     else:
+        #         row["Most Used Schedd"] = "UNKNOWN"
         # if agg == "Projects":
         #     row["Num Users"] = len(set(data["User"]))
         #     row["Num Site Instns"] = len(set(data["_Institutions"]))
