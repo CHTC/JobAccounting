@@ -126,17 +126,17 @@ class OsgScheddResourcesFormatter(BaseFormatter):
     def get_legend(self):
         custom_items = OrderedDict()
 
-        custom_items["Total Unuse Mem GBh"] = "Total unused (requested - used) memory time of all jobs, in GB-hours"
+        custom_items["Total Unuse Mem GBh"] = "Total unused (allocated - used) memory time of all jobs, in GB-hours"
         custom_items["Total Mem GBh Util%"] = "Total memory utilization, weighted by wallclock time"
-        custom_items["Total Req Mem GBh"] = "Total requested (allocated) memory time of all jobs, in GB-hours"
+        custom_items["Total Allo Mem GBh"] = "Total allocated memory time of all jobs, in GB-hours"
 
-        custom_items["Min/25%/Median/75%/Max/Mean/Std Util% Mem"] = r"Final execution memory utility (% used/requested)"
-        custom_items["Min/25%/Median/75%/Max/Mean/Std Req Mem GBh"] = "Requested (allocated) memory time (using final execution memory request) in GB-hours"
+        custom_items["Min/25%/Median/75%/Max/Mean/Std Util% Mem"] = r"Final execution memory utility (% used/allocated)"
+        custom_items["Min/25%/Median/75%/Max/Mean/Std Allo Mem GBh"] = "Allocated memory time (using final execution memory request) in GB-hours"
         custom_items["Min/25%/Median/75%/Max/Mean/Std Unuse Mem GB"] = "Unused memory time (using final execution memory request and usage) in GB-hours"
-        custom_items["Min/25%/Median/75%/Max/Mean/Std Req Mem"] = "Final execution memory request in GB"
+        custom_items["Min/25%/Median/75%/Max/Mean/Std Allo Mem"] = "Final execution memory allocation in GB"
         custom_items["Min/25%/Median/75%/Max/Mean/Std Use Mem"] = "Final execution memory usage in GB"
 
-        custom_items["&lt;"] = "Memory request or usage was below 1 GB"
+        custom_items["&lt;"] = "Memory allocation or usage was below 1 GB"
 
         custom_items["% Short Jobs"] = "Percent of Num Uniq Job Ids that were short jobs (<1 minute)"
         custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for"

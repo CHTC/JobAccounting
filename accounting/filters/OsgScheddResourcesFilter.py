@@ -18,9 +18,9 @@ except ImportError:
         raise
 
 DEFAULT_COLUMNS = {
-    25: "Total Unuse Mem GBh",
-    30: "Total Mem GBh Util%",
-    35: "Total Req Mem GBh",
+    25: "Total Mem GBh Util%",
+    30: "Total Unuse Mem GBh",
+    35: "Total Allo Mem GBh",
 
     100: "&nbsp;",
 
@@ -35,14 +35,14 @@ DEFAULT_COLUMNS = {
 
     200: "&nbsp;",
 
-    210: "Min Req Mem GBh",
-    220: "25% Req Mem GBh",
-    230: "Med Req Mem GBh",
-    240: "75% Req Mem GBh",
-    245: "95% Req Mem GBh",
-    250: "Max Req Mem GBh",
-    260: "Mean Req Mem GBh",
-    270: "Stdv Req Mem GBh",
+    210: "Min Allo Mem GBh",
+    220: "25% Allo Mem GBh",
+    230: "Med Allo Mem GBh",
+    240: "75% Allo Mem GBh",
+    245: "95% Allo Mem GBh",
+    250: "Max Allo Mem GBh",
+    260: "Mean Allo Mem GBh",
+    270: "Stdv Allo Mem GBh",
 
     300: "&nbsp;",
 
@@ -57,14 +57,14 @@ DEFAULT_COLUMNS = {
 
     400: "&nbsp;",
 
-    410: "Min Req Mem",
-    420: "25% Req Mem",
-    430: "Med Req Mem",
-    440: "75% Req Mem",
-    445: "95% Req Mem",
-    450: "Max Req Mem",
-    460: "Mean Req Mem",
-    470: "Stdv Req Mem",
+    410: "Min Allo Mem",
+    420: "25% Allo Mem",
+    430: "Med Allo Mem",
+    440: "75% Allo Mem",
+    445: "95% Allo Mem",
+    450: "Max Allo Mem",
+    460: "Mean Allo Mem",
+    470: "Stdv Allo Mem",
 
     500: "&nbsp;",
 
@@ -706,40 +706,40 @@ class OsgScheddResourcesFilter(BaseFilter):
         memory_requests_sorted = self.clean(data['RequestMemory'])
         memory_requests_sorted.sort()
         if len(memory_requests_sorted) > 0:
-            row["Min Req Mem"]  = memory_requests_sorted[ 0] / 1024
-            row["25% Req Mem"]  = memory_requests_sorted[  len(memory_requests_sorted)//4] / 1024
-            row["Med Req Mem"]  = stats.median(memory_requests_sorted) / 1024
-            row["75% Req Mem"]  = memory_requests_sorted[3*len(memory_requests_sorted)//4] / 1024
-            row["95% Req Mem"]  = memory_requests_sorted[int(0.95*len(memory_requests_sorted))] / 1024
-            row["Max Req Mem"]  = memory_requests_sorted[-1] / 1024
-            row["Mean Req Mem"] = stats.mean(memory_requests_sorted) / 1024
+            row["Min Allo Mem"]  = memory_requests_sorted[ 0] / 1024
+            row["25% Allo Mem"]  = memory_requests_sorted[  len(memory_requests_sorted)//4] / 1024
+            row["Med Allo Mem"]  = stats.median(memory_requests_sorted) / 1024
+            row["75% Allo Mem"]  = memory_requests_sorted[3*len(memory_requests_sorted)//4] / 1024
+            row["95% Allo Mem"]  = memory_requests_sorted[int(0.95*len(memory_requests_sorted))] / 1024
+            row["Max Allo Mem"]  = memory_requests_sorted[-1] / 1024
+            row["Mean Allo Mem"] = stats.mean(memory_requests_sorted) / 1024
         else:
-            for col in [f"{x} Req Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+            for col in [f"{x} Allo Mem" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
                 row[col] = 0
         if len(memory_requests_sorted) > 1:
-            row["Stdv Req Mem"] = stats.stdev(memory_requests_sorted) / 1024
+            row["Stdv Allo Mem"] = stats.stdev(memory_requests_sorted) / 1024
         else:
             # There is no variance if there is only one value
-            row["Stdv Req Mem"] = 0
+            row["Stdv Allo Mem"] = 0
 
         memory_hours_requested_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["RequestMemory"], data["RemoteWallClockTime"])])
         memory_hours_requested_sorted.sort()
         if len(memory_hours_requested_sorted) > 0:
-            row["Min Req Mem GBh"]  = memory_hours_requested_sorted[ 0] / (1024*3600)
-            row["25% Req Mem GBh"]  = memory_hours_requested_sorted[  len(memory_hours_requested_sorted)//4] / (1024*3600)
-            row["Med Req Mem GBh"]  = stats.median(memory_hours_requested_sorted) / (1024*3600)
-            row["75% Req Mem GBh"]  = memory_hours_requested_sorted[3*len(memory_hours_requested_sorted)//4] / (1024*3600)
-            row["95% Req Mem GBh"]  = memory_hours_requested_sorted[int(0.95*len(memory_hours_requested_sorted))] / (1024*3600)
-            row["Max Req Mem GBh"]  = memory_hours_requested_sorted[-1] / (1024*3600)
-            row["Mean Req Mem GBh"] = stats.mean(memory_hours_requested_sorted) / (1024*3600)
+            row["Min Allo Mem GBh"]  = memory_hours_requested_sorted[ 0] / (1024*3600)
+            row["25% Allo Mem GBh"]  = memory_hours_requested_sorted[  len(memory_hours_requested_sorted)//4] / (1024*3600)
+            row["Med Allo Mem GBh"]  = stats.median(memory_hours_requested_sorted) / (1024*3600)
+            row["75% Allo Mem GBh"]  = memory_hours_requested_sorted[3*len(memory_hours_requested_sorted)//4] / (1024*3600)
+            row["95% Allo Mem GBh"]  = memory_hours_requested_sorted[int(0.95*len(memory_hours_requested_sorted))] / (1024*3600)
+            row["Max Allo Mem GBh"]  = memory_hours_requested_sorted[-1] / (1024*3600)
+            row["Mean Allo Mem GBh"] = stats.mean(memory_hours_requested_sorted) / (1024*3600)
         else:
-            for col in [f"{x} Req Mem GBh" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
+            for col in [f"{x} Allo Mem GBh" for x in ["Min", "25%", "Med", "75%", "95%", "Max", "Mean"]]:
                 row[col] = 0
         if len(memory_hours_requested_sorted) > 1:
-            row["Stdv Req Mem GBh"] = stats.stdev(memory_hours_requested_sorted) / (1024*3600)
+            row["Stdv Allo Mem GBh"] = stats.stdev(memory_hours_requested_sorted) / (1024*3600)
         else:
             # There is no variance if there is only one value
-            row["Stdv Req Mem GBh"] = 0
+            row["Stdv Allo Mem GBh"] = 0
 
         memory_usages_sorted = self.clean(data['MemoryUsage'])
         memory_usages_sorted.sort()
@@ -839,7 +839,7 @@ class OsgScheddResourcesFilter(BaseFilter):
         # Totals that use the metrics generated for the distributions
         row["Total Unuse Mem GBh"] = sum(memory_hours_unusages_sorted) / (1024*3600)
         row["Total Mem GBh Util%"] = 100 * sum(memory_hours_usages_sorted) / sum(memory_hours_requested_sorted)
-        row["Total Req Mem GBh"] = sum(memory_hours_requested_sorted) / (1024*3600)
+        row["Total Allo Mem GBh"] = sum(memory_hours_requested_sorted) / (1024*3600)
 
         # Compute mode for Project and Schedd columns in the Users table
         # if agg == "Users":
