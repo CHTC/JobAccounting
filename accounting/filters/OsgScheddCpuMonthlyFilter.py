@@ -88,6 +88,8 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         self.schedd_collector_host_map = {}
         self.schedd_vacate_reasons_version_qdates_pickle = Path("ospool-ap-qdate-vacate-reasons-version.pkl")
         self.schedd_vacate_reasons_version_qdates = {}
+        self.index = kwargs.get("es_index", "osg_schedd_write")
+        self.client = self.connect(**kwargs)
         if self.schedd_collector_host_map_pickle.exists():
             try:
                 self.schedd_collector_host_map = pickle.load(open(self.schedd_collector_host_map_pickle, "rb"))
