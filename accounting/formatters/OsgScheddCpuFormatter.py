@@ -171,8 +171,9 @@ class OsgScheddCpuFormatter(BaseFormatter):
         custom_items["% Jobs using S'ty"] = "Percent of Num Uniq Job Ids that requested to run inside a Singularity image"
         custom_items["% Ckpt Able"] = "Percent of Num Uniq Job Ids that may be using user-level checkpointing"
 
-        custom_items["Mean Actv Hrs"] = "Mean slot activation time (in hours)"
-        custom_items["Mean Setup Secs"] = "Mean slot activation setup time (in seconds). The slot activation setup time is the duration from when a shadow sends a claim activation to when the shadow is told that a job's executable is running."
+        custom_items["Mean Actv Hrs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationDuration">slot activation time</a> (in hours)"""
+        custom_items["Mean Setup Secs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationSetupDuration">slot activation setup time</a> (in seconds). The slot activation setup time is the duration from when a shadow sends a claim activation to when the shadow is told that a job's executable is running."""
+        custom_items["Mean Strip Secs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationTeardownDuration">slot teardown time</a> (in seconds)"""
 
         # custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
 

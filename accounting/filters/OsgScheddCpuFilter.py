@@ -38,15 +38,7 @@ DEFAULT_COLUMNS = {
 
     100: "Mean Actv Hrs",
     105: "Mean Setup Secs",
-
-    # 110: "Min Hrs",
-    # 120: "25% Hrs",
-    # 130: "Med Hrs",
-    # 140: "75% Hrs",
-    # 145: "95% Hrs",
-    # 150: "Max Hrs",
-    # 160: "Mean Hrs",
-    # 170: "Std Hrs",
+    107: "Mean Strip Secs",
 
     180: "Input Files / Exec Att",
 #    181: "Input MB / Exec Att",
@@ -107,6 +99,7 @@ DEFAULT_FILTER_ATTRS = [
     "SingularityImage",
     "ActivationDuration",
     "ActivationSetupDuration",
+    "ActivationTeardownDuration",
     "CondorVersion",
     "NumVacatesByReason",
     "QDate",
@@ -631,25 +624,6 @@ class OsgScheddCpuFilter(BaseFilter):
         long_times_sorted = self.clean(long_times_sorted)
         long_times_sorted.sort()
 
-        # Activation metrics added in 9.4.1
-        # Added to the OSG Connect access points at 1640100600
-        activation_durations = []
-        setup_durations = []
-        act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
-        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
-                data["JobStartDate"],
-                data["JobCurrentStartDate"],
-                data["ActivationDuration"],
-                data["ActivationSetupDuration"]):
-            start_date = current_start_date or start_date
-            if None in [start_date, activation_duration, setup_duration]:
-                continue
-            if ((start_date > act_cutoff_date) and
-                (activation_duration < (act_cutoff_date - 24*3600) and
-                (setup_duration < (act_cutoff_date - 24*3600)))):
-                activation_durations.append(activation_duration)
-                setup_durations.append(setup_duration)
-
         # Compute columns
         row["All CPU Hours"]    = sum(self.clean(goodput_cpu_time)) / 3600
         row["Num Uniq Job Ids"] = sum(data['_NumJobs'])
@@ -675,12 +649,17 @@ class OsgScheddCpuFilter(BaseFilter):
             row["% Jobs using S'ty"] = 0
 
         # Compute activation time stats
-        row["Mean Actv Hrs"] = ""
-        row["Mean Setup Secs"] = ""
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        activation_durations = [d for d in self.clean(data["ActivationDuration"]) if d < activation_limit]
+        setup_durations = [d for d in self.clean(data["ActivationSetupDuration"]) if d < activation_limit]
+        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < activation_limit]
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if len(activation_durations) > 0:
             row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
         if len(setup_durations) > 0:
             row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
+        if len(teardown_durations) > 0:
+            row["Mean Strip Secs"] = sum(teardown_durations) / len(teardown_durations)
 
         # Compute job unit metrics
         row["Med Job Units"] = stats.median(self.clean(data["NumJobUnits"], allow_empty_list=False))
@@ -843,25 +822,6 @@ class OsgScheddCpuFilter(BaseFilter):
                 output_files_total_bytes.append(output_files_bytes)
                 output_files_total_job_stops.append(1)
 
-        # Activation metrics added in 9.4.1
-        # Added to the OSG Connect access points at 1640100600
-        activation_durations = []
-        setup_durations = []
-        act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
-        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
-                data["JobStartDate"],
-                data["JobCurrentStartDate"],
-                data["ActivationDuration"],
-                data["ActivationSetupDuration"]):
-            start_date = current_start_date or start_date
-            if None in [start_date, activation_duration, setup_duration]:
-                continue
-            if ((start_date > act_cutoff_date) and
-                (activation_duration < (act_cutoff_date - 24*3600) and
-                (setup_duration < (act_cutoff_date - 24*3600)))):
-                activation_durations.append(activation_duration)
-                setup_durations.append(setup_duration)
-
         # NumVacatesByReason added in 24.11.1
         num_vacates_by_reason_exists = 0
         num_vacates_shadows = 0
@@ -1017,12 +977,17 @@ class OsgScheddCpuFilter(BaseFilter):
             row[key] = row.get(key, -999)
 
         # Compute activation time stats
-        row["Mean Actv Hrs"] = ""
-        row["Mean Setup Secs"] = ""
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        activation_durations = [d for d in self.clean(data["ActivationDuration"]) if d < activation_limit]
+        setup_durations = [d for d in self.clean(data["ActivationSetupDuration"]) if d < activation_limit]
+        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < activation_limit]
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if len(activation_durations) > 0:
             row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
         if len(setup_durations) > 0:
             row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
+        if len(teardown_durations) > 0:
+            row["Mean Strip Secs"] = sum(teardown_durations) / len(teardown_durations)
 
         # Compute job unit metrics
         row["Med Job Units"] = stats.median(self.clean(data["NumJobUnits"], allow_empty_list=False))

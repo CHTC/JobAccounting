@@ -38,6 +38,7 @@ DEFAULT_COLUMNS = {
 
     100: "Mean Actv Hrs",
     105: "Mean Setup Secs",
+    107: "Mean Strip Secs",
 
     180: "Input Files / Exec Att",
 #    181: "Input MB / Exec Att",
@@ -352,10 +353,13 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["NumShadowsWithVacatesByReason"] = int(has_num_vacates_by_reason) * i.get("NumShadowStarts", 0)
         sum_cols["NumVacatesTransferInputError"] = i.get("NumVacatesByReason", {}).get("TransferInputError", 0)
 
-        sum_cols["ActivationDuration"] = i.get("ActivationDuration", 0)
-        sum_cols["NumActivationDuration"] = int(i.get("ActivationDuration") is not None)
-        sum_cols["ActivationSetupDuration"] = i.get("ActivationSetupDuration", 0)
-        sum_cols["NumActivationSetupDuration"] = int(i.get("ActivationSetupDuration") is not None)
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        for col in ["ActivationDuration", "ActivationSetupDuration", "ActivationTeardownDuration"]:
+            sum_cols[col] = sum_cols[f"Num{col}"] = 0
+            value = i.get(col)
+            if value is not None and value < activation_limit:
+                sum_cols[col] = value
+                sum_cols[f"Num{col}"] = 1
 
         max_cols = {}
         # max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
@@ -552,24 +556,16 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
 
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if data["NumActivationDuration"] > 0:
             row["Mean Actv Hrs"] = (data["ActivationDuration"] / data["NumActivationDuration"]) / 3600
-        else:
-            row["Mean Actv Hrs"] = ""
         if data["NumActivationSetupDuration"] > 0:
             row["Mean Setup Secs"] = data["ActivationSetupDuration"] / data["NumActivationSetupDuration"]
-        else:
-            row["Mean Setup Secs"] = ""
+        if data["NumActivationTeardownDuration"] > 0:
+            row["Mean Strip Secs"] = data["ActivationTeardownDuration"] / data["NumActivationTeardownDuration"]
 
-        # if data["LongJobs"] > 0:
-        #     row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-        #     row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-        #     row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        # else:
-        #     row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
-
-        row["Num Users"]        = len(data["Users"])
-        row["Num Sites"]        = len(data["Sites"])
+        row["Num Users"] = len(data["Users"])
+        row["Num Sites"] = len(data["Sites"])
 
         return row
 
@@ -669,21 +665,13 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         row["Num TransferInputError"] = data["NumVacatesTransferInputError"]
         row["Num Jobs Post 24.11.1"] = data["NumJobsWithVacatesByReason"]
 
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if data["NumActivationDuration"] > 0:
             row["Mean Actv Hrs"] = (data["ActivationDuration"] / data["NumActivationDuration"]) / 3600
-        else:
-            row["Mean Actv Hrs"] = ""
         if data["NumActivationSetupDuration"] > 0:
             row["Mean Setup Secs"] = data["ActivationSetupDuration"] / data["NumActivationSetupDuration"]
-        else:
-            row["Mean Setup Secs"] = ""
-
-        # if data["LongJobs"] > 0:
-        #     row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-        #     row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-        #     row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        # else:
-        #     row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
+        if data["NumActivationTeardownDuration"] > 0:
+            row["Mean Strip Secs"] = data["ActivationTeardownDuration"] / data["NumActivationTeardownDuration"]
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":
