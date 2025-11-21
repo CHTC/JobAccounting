@@ -38,6 +38,7 @@ DEFAULT_COLUMNS = {
 
     100: "Mean Actv Hrs",
     105: "Mean Setup Secs",
+    107: "Mean Strip Secs",
 
     180: "Input Files / Exec Att",
 #    181: "Input MB / Exec Att",
@@ -356,6 +357,8 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["NumActivationDuration"] = int(i.get("ActivationDuration") is not None)
         sum_cols["ActivationSetupDuration"] = i.get("ActivationSetupDuration", 0)
         sum_cols["NumActivationSetupDuration"] = int(i.get("ActivationSetupDuration") is not None)
+        sum_cols["ActivationTeardownDuration"] = i.get("ActivationTeardownDuration", 0) if i.get("ActivationTeardownDuration", 0) < 1_700_000_000 else 0
+        sum_cols["NumActivationTeardownDuration"] = int(i.get("ActivationTeardownDuration") is not None and i.get("ActivationTeardownDuration", 0) < 1_700_000_000)
 
         max_cols = {}
         # max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
@@ -552,24 +555,16 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
 
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if data["NumActivationDuration"] > 0:
             row["Mean Actv Hrs"] = (data["ActivationDuration"] / data["NumActivationDuration"]) / 3600
-        else:
-            row["Mean Actv Hrs"] = ""
         if data["NumActivationSetupDuration"] > 0:
             row["Mean Setup Secs"] = data["ActivationSetupDuration"] / data["NumActivationSetupDuration"]
-        else:
-            row["Mean Setup Secs"] = ""
+        if data["NumActivationTeardownDuration"] > 0:
+            row["Mean Strip Secs"] = data["ActivationTeardownDuration"] / data["NumActivationTeardownDuration"]
 
-        # if data["LongJobs"] > 0:
-        #     row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-        #     row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-        #     row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        # else:
-        #     row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
-
-        row["Num Users"]        = len(data["Users"])
-        row["Num Sites"]        = len(data["Sites"])
+        row["Num Users"] = len(data["Users"])
+        row["Num Sites"] = len(data["Sites"])
 
         return row
 
@@ -669,21 +664,13 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         row["Num TransferInputError"] = data["NumVacatesTransferInputError"]
         row["Num Jobs Post 24.11.1"] = data["NumJobsWithVacatesByReason"]
 
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if data["NumActivationDuration"] > 0:
             row["Mean Actv Hrs"] = (data["ActivationDuration"] / data["NumActivationDuration"]) / 3600
-        else:
-            row["Mean Actv Hrs"] = ""
         if data["NumActivationSetupDuration"] > 0:
             row["Mean Setup Secs"] = data["ActivationSetupDuration"] / data["NumActivationSetupDuration"]
-        else:
-            row["Mean Setup Secs"] = ""
-
-        # if data["LongJobs"] > 0:
-        #     row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-        #     row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-        #     row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        # else:
-        #     row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
+        if data["NumActivationTeardownDuration"] > 0:
+            row["Mean Strip Secs"] = data["ActivationTeardownDuration"] / data["NumActivationTeardownDuration"]
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":

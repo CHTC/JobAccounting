@@ -978,7 +978,8 @@ class OsgScheddCpuFilter(BaseFilter):
         # Compute activation time stats
         activation_durations = self.clean(data["ActivationDuration"])
         setup_durations = self.clean(data["ActivationSetupDuration"])
-        teardown_durations = self.clean(data["ActivationTeardownDuration"])
+        # timestamps somehow ending up in teardown duration?
+        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < 1700000000]
         row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if len(activation_durations) > 0:
             row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
