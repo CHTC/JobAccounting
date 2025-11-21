@@ -353,12 +353,13 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["NumShadowsWithVacatesByReason"] = int(has_num_vacates_by_reason) * i.get("NumShadowStarts", 0)
         sum_cols["NumVacatesTransferInputError"] = i.get("NumVacatesByReason", {}).get("TransferInputError", 0)
 
-        sum_cols["ActivationDuration"] = i.get("ActivationDuration", 0)
-        sum_cols["NumActivationDuration"] = int(i.get("ActivationDuration") is not None)
-        sum_cols["ActivationSetupDuration"] = i.get("ActivationSetupDuration", 0)
-        sum_cols["NumActivationSetupDuration"] = int(i.get("ActivationSetupDuration") is not None)
-        sum_cols["ActivationTeardownDuration"] = i.get("ActivationTeardownDuration", 0) if i.get("ActivationTeardownDuration", 0) < 1_700_000_000 else 0
-        sum_cols["NumActivationTeardownDuration"] = int(i.get("ActivationTeardownDuration") is not None and i.get("ActivationTeardownDuration", 0) < 1_700_000_000)
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        for col in ["ActivationDuration", "ActivationSetupDuration", "ActivationTeardownDuration"]:
+            sum_cols[col] = sum_cols[f"Num{col}"] = 0
+            value = i.get(col)
+            if value is not None and value < activation_limit:
+                sum_cols[col] = value
+                sum_cols[f"Num{col}"] = 1
 
         max_cols = {}
         # max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time

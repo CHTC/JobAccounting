@@ -649,9 +649,10 @@ class OsgScheddCpuFilter(BaseFilter):
             row["% Jobs using S'ty"] = 0
 
         # Compute activation time stats
-        activation_durations = self.clean(data["ActivationDuration"])
-        setup_durations = self.clean(data["ActivationSetupDuration"])
-        teardown_durations = self.clean(data["ActivationTeardownDuration"])
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        activation_durations = [d for d in self.clean(data["ActivationDuration"]) if d < activation_limit]
+        setup_durations = [d for d in self.clean(data["ActivationSetupDuration"]) if d < activation_limit]
+        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < activation_limit]
         row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if len(activation_durations) > 0:
             row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
@@ -976,10 +977,10 @@ class OsgScheddCpuFilter(BaseFilter):
             row[key] = row.get(key, -999)
 
         # Compute activation time stats
-        activation_durations = self.clean(data["ActivationDuration"])
-        setup_durations = self.clean(data["ActivationSetupDuration"])
-        # timestamps somehow ending up in teardown duration?
-        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < 1700000000]
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        activation_durations = [d for d in self.clean(data["ActivationDuration"]) if d < activation_limit]
+        setup_durations = [d for d in self.clean(data["ActivationSetupDuration"]) if d < activation_limit]
+        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < activation_limit]
         row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if len(activation_durations) > 0:
             row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
