@@ -147,7 +147,7 @@ class OsgScheddCpuFormatter(BaseFormatter):
         custom_items["Max Used Mem MB"]  = "Maximum measured memory usage across all submitted jobs' last execution attempts in MB"
         custom_items["Max Rqst Cpus"]    = "Maximum number of CPUs requested across all submitted jobs"
 
-        custom_items["Num Shadw Starts"] = "Total times a condor_shadow was spawned across all submitted jobs (excluding Local and Scheduler Universe jobs)"
+        custom_items["Num Shadow Starts"] = "Total times a condor_shadow was spawned across all submitted jobs (excluding Local and Scheduler Universe jobs)"
         custom_items["Num Exec Atts"]    = "Total number of execution attempts (excluding Local and Scheduler Universe jobs)"
         custom_items["Num Rm'd Jobs"]    = "Number of jobs that were removed from the queue instead of allowing to complete"
         custom_items["Num Short Jobs"]   = "Number of execution attempts that completed in less than 60 seconds"

@@ -1,8 +1,6 @@
 
 import re
-import sys
 import time
-import json
 import htcondor
 import pickle
 import statistics as stats
