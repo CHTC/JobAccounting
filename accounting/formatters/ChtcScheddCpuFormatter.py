@@ -1,3 +1,4 @@
+import sys
 from .BaseFormatter import BaseFormatter
 from datetime import datetime
 from collections import OrderedDict

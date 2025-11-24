@@ -1,29 +1,7 @@
-import sys
 from .BaseFormatter import BaseFormatter
 from datetime import datetime
 from collections import OrderedDict
-
-
-def hhmm(hours):
-    # Convert float hours to HH:MM
-    h = int(hours)
-    m = int(60 * (float(hours) - int(hours)))
-    return f"{h:02d}:{m:02d}"
-
-
-def handle_dashes(dtype, fmt, value):
-    # Cast value to dtype and format it.
-    # Right-align any non-castable values and return them as is.
-    formatted_str = "<td></td>"
-    try:
-        value = dtype(value)
-        formatted_str = f"<td>{value:{fmt}}</td>"
-    except ValueError:
-        formatted_str = f"""<td style="text-align: right">{value}</td>"""
-    except Exception as err:
-        print(f"Caught unexpected exception {str(err)} when converting {value} to {repr(dtype)}.", file=sys.stderr)
-        formatted_str = f"""<td style="text-align: right">{value}</td>"""
-    return formatted_str
+from .OsgScheddCpuFormatter import compact_institution, hhmm, handle_dashes
 
 
 class OsgScheddGpuFormatter(BaseFormatter):
@@ -71,6 +49,9 @@ class OsgScheddGpuFormatter(BaseFormatter):
             "Num Jobs w/>1 Exec Att",
             "Num Jobs w/1+ Holds",
             "Num Short Jobs",
+            "Num Shadow Starts Post 24.11.1",
+            "Num TransferInputError",
+            "Num Jobs Post 24.11.1",
         }
         return super().rm_cols(data, cols=cols)
 
@@ -79,6 +60,7 @@ class OsgScheddGpuFormatter(BaseFormatter):
 
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
+            "PI Institution": lambda x: f'<td class="text">{compact_institution(x)}</td>',
             "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Med Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
@@ -104,6 +86,8 @@ class OsgScheddGpuFormatter(BaseFormatter):
             "% Jobs Over Rqst Disk": lambda x: f"<td>{float(x):.1f}</td>",
             "% Ckpt Able":          lambda x: f"<td>{float(x):.1f}</td>",
             "% Jobs using S'ty":    lambda x: f"<td>{float(x):.1f}</td>",
+            "% Shadw w/o Start":    lambda x: f"<td>{float(x):.1f}</td>",
+            "% Shadw Input Fail":   lambda x: handle_dashes(float, ".1f", x),
             "Input Files / Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Input MB / Exec Att":    lambda x: f"<td>{float(x):.1f}</td>",
             "Input MB / File":        lambda x: f"<td>{float(x):.1f}</td>",
@@ -127,7 +111,7 @@ class OsgScheddGpuFormatter(BaseFormatter):
         custom_items["Max Used Mem MB"]  = "Maximum measured memory usage across all submitted jobs' last execution attempts in MB"
         custom_items["Max Rqst Cpus"]    = "Maximum number of CPUs requested across all submitted jobs"
 
-        custom_items["Num Shadw Starts"] = "Total times a condor_shadow was spawned across all submitted jobs (excluding Local and Scheduler Universe jobs)"
+        custom_items["Num Shadow Starts"] = "Total times a condor_shadow was spawned across all submitted jobs (excluding Local and Scheduler Universe jobs)"
         custom_items["Num Exec Atts"]    = "Total number of execution attempts (excluding Local and Scheduler Universe jobs)"
         custom_items["Num Rm'd Jobs"]    = "Number of jobs that were removed from the queue instead of allowing to complete"
         custom_items["Num Short Jobs"]   = "Number of execution attempts that completed in less than 60 seconds"
@@ -151,8 +135,9 @@ class OsgScheddGpuFormatter(BaseFormatter):
         custom_items["% Jobs using S'ty"] = "Percent of Num Uniq Job Ids that requested to run inside a Singularity image"
         custom_items["% Ckpt Able"] = "Percent of Num Uniq Job Ids that may be using user-level checkpointing"
 
-        custom_items["Mean Actv Hrs"] = "Mean slot activation time (in hours)"
-        custom_items["Mean Setup Secs"] = "Mean slot activation setup time (in seconds). The slot activation setup time is the duration from when a shadow sends a claim activation to when the shadow is told that a job's executable is running."
+        custom_items["Mean Actv Hrs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationDuration">slot activation time</a> (in hours)"""
+        custom_items["Mean Setup Secs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationSetupDuration">slot activation setup time</a> (in seconds). The slot activation setup time is the duration from when a shadow sends a claim activation to when the shadow is told that a job's executable is running."""
+        custom_items["Mean Strip Secs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationTeardownDuration">slot teardown time</a> (in seconds)"""
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
 
