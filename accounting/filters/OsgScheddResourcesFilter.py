@@ -760,7 +760,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Use Mem"] = 0
 
-        memory_hours_usages_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["MemoryUsage"], data["RemoteWallClockTime"])])
+        memory_hours_usages_sorted = self.clean([min(req, use)*t if (None not in (req, use, t)) else None for use, req, t in zip(data["MemoryUsage"], data["RequestMemory"], data["RemoteWallClockTime"])])
         memory_hours_usages_sorted.sort()
         # if len(memory_hours_usages_sorted) > 0:
         #     row["Min Use Mem GBh"]  = memory_hours_usages_sorted[ 0] / (1024*3600)
