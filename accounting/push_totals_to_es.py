@@ -1,3 +1,4 @@
+import sys
 import json
 import elasticsearch
 import logging
@@ -9,6 +10,7 @@ logger = logging.getLogger("accounting.push_totals_to_es")
 def push_totals_to_es(csv_files, index_name, **kwargs):
     def rename_field(field):
         field = field.casefold()
+        field = field.replace("util%", "util_pct")
         field = field.replace(" ", "_")
         field = field.replace("'d", "ed")
         field = field.replace("w/", "with_")
@@ -113,6 +115,8 @@ def push_totals_to_es(csv_files, index_name, **kwargs):
             table = table[:-1]
         (totals[table], lengths[table]) = read_csv(csv_file)
         del totals[table][table.casefold()]
+        if "nbsp;" in totals[table]:
+            del totals[table]["nbsp;"]
         for key in totals[table]:
             if totals[table][key] == "n/a":
                 totals[table][key] = None
