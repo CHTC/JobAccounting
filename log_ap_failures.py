@@ -17,6 +17,7 @@ LOG_SCHEDD_TIMEOUT_RE = re.compile(r"(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:
 LOG_CONVERT_FAILURE_RE = re.compile(r"(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(,\d+)? : (?P<logger>[^:]+):(?P<log_level>\S+) - Failure when converting document on\s+(?P<schedd>\S+)\s+history")
 LOG_HTCONDOR_ERROR_RE = re.compile(r"htcondor.HTCondorIOError:\s+(?P<error>.*)")
 LOG_TIMEOUT_ERROR_RE = re.compile(r"multiprocessing\.context\.TimeoutError")
+LOG_ES_CONNECTION_ERROR_ER = re.compile(r"(ConnectionRefusedError|urllib3\.exceptions\.NewConnectionError|elasticsearch\.exceptions\.ConnectionError)")
 LINE_REGEXES = {
     "schedd_entry": LOG_SCHEDD_ENTRY_RE,
     "schedd_failure": LOG_SCHEDD_FAILURE_RE,
@@ -179,6 +180,7 @@ def main():
         ckpt = get_checkpoint(args.checkpoint, args.log_file, args.start)
 
     in_traceback = False
+    skip_traceback = False
     at_start = False
     last_ckpt = 0
     start_date = args.start.strftime(r"%Y-%m-%d")
@@ -207,8 +209,15 @@ def main():
                 current_traceback.append(line)
                 last_ckpt = f.tell()
                 continue
-            elif in_traceback and line.strip() == "":
+            elif in_traceback and (line.strip() == "" or line.startswith("elasticsearch.exceptions.ConnectionError")):
                 in_traceback = False
+                if skip_traceback or line.startswith("elasticsearch.exceptions.ConnectionError"):  # skip ES connection errors
+                    if line.startswith("elasticsearch.exceptions.ConnectionError"):
+                        current_traceback.append(line)
+                    skip_traceback = False
+                    last_ckpt = f.tell()
+                    continue
+                skip_traceback = False
                 #print(f"Got trackback: {current_traceback}")
                 m = LOG_HTCONDOR_ERROR_RE.match(current_traceback[-1])
                 if m:
@@ -221,6 +230,8 @@ def main():
                 last_ckpt = f.tell()
                 continue
             elif in_traceback:
+                if LOG_ES_CONNECTION_ERROR_ER.match(line.strip()):  # skip ES connection errors
+                    skip_traceback = True
                 current_traceback.append(line)
                 last_ckpt = f.tell()
                 continue
