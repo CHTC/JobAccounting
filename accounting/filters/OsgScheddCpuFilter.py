@@ -15,7 +15,7 @@ DEFAULT_COLUMNS = {
      6: "% Shadw Input Fail",
     15: "Num Uniq Job Ids",
     20: "All CPU Hours",
-    30: "% Good CPU Hours",
+    30: r"% Good CPU Hours",
     35: "Job Unit Hours",
 
     45: "% Ckpt Able",
@@ -66,11 +66,16 @@ DEFAULT_COLUMNS = {
     540: "Med Job Units",
     545: "Max Job Units",
 
+    # CSV-only columns
+    590: "% Shadw w/o Start CSV",
+    595: "% Shadw Input Fail CSV",
     600: "Num Job Starts",
     610: "Num Shadow Starts",
-    620: "Num Shadow Starts Post 24.11.1",
-    630: "Num TransferInputError",
-    640: "Num Jobs Post 24.11.1",
+    620: "Num Shadows w/o Start",
+    630: r"% of All Shadow Fails",
+    640: "Num Shadow Starts Post 24.11.1",
+    650: "Num TransferInputError",
+    660: "Num Jobs Post 24.11.1",
 }
 
 
@@ -566,7 +571,7 @@ class OsgScheddCpuFilter(BaseFilter):
         if agg == "Institution":
             columns[10] = "Num Sites"
             columns[11] = "Num Users"
-            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,325,330,340,350,355,390,600,610,620,630,640]
+            rm_columns = [5,6,30,45,50,51,52,53,54,55,56,57,70,80,180,181,182,190,191,192,300,305,325,330,340,350,355,390,590,595,600,610,620,630,640,650,660]
             [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
@@ -871,9 +876,9 @@ class OsgScheddCpuFilter(BaseFilter):
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
-            row["% Good CPU Hours"] = 100 * row["Good CPU Hours"] / row["All CPU Hours"]
+            row[r"% Good CPU Hours"] = 100 * row["Good CPU Hours"] / row["All CPU Hours"]
         else:
-            row["% Good CPU Hours"] = 0
+            row[r"% Good CPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
             row["Shadw Starts / Job Id"] = row["Num Shadow Starts"] / row["Num Uniq Job Ids"]
             row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
@@ -910,6 +915,11 @@ class OsgScheddCpuFilter(BaseFilter):
         else:
             row["CPU Hours / Bad Exec Att"] = 0
 
+        row["% Shadw w/o Start CSV"] = row["% Shadw w/o Start"]
+        row["% Shadw Input Fail CSV"] = row["% Shadw Input Fail"]
+        row["Num Shadows w/o Start"] = max(row["Num Shadow Starts"] - row["Num Job Starts"], 0)
+        total_shadows_without_start = sum(self.clean(self.data[agg]["TOTAL"]["NumShadowStarts"])) - sum(self.clean(self.data[agg]["TOTAL"]["NumJobStarts"]))
+        row[r"% of All Shadow Fails"] = 100 * row["Num Shadows w/o Start"] / max(total_shadows_without_start, row["Num Shadows w/o Start"], 1)
         row["Num Shadow Starts Post 24.11.1"] = num_vacates_shadows
         row["Num TransferInputError"] = num_vacates_transferinputerror
         row["Num Jobs Post 24.11.1"] = num_vacates_by_reason_exists
