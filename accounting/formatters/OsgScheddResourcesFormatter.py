@@ -111,6 +111,9 @@ class OsgScheddResourcesFormatter(BaseFormatter):
             "Stdv Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "% Short Jobs":         lambda x: f"<td>{float(x):.1f}</td>",
             "Total Mem GBh Util%":  lambda x: f"<td>{float(x):.1f}</td>",
+            "% Jobs Can Incr Mem":   lambda x: f"<td>{float(x):.1f}</td>",
+            "% Jobs Est Incr'd Mem": lambda x: f"<td>{float(x):.1f}</td>",
+            "Avg Mem Incr Factor":   lambda x: f"<td>{float(x):.1f}</td>",
         }
         for memory_col in memory_lt_cols:
             for distro in distros:
@@ -129,6 +132,10 @@ class OsgScheddResourcesFormatter(BaseFormatter):
         custom_items["Total Unuse Mem GBh"] = "Total unused (allocated - used) memory time of all jobs, in GB-hours"
         custom_items["Total Mem GBh Util%"] = "Total memory utilization, weighted by wallclock time"
         custom_items["Total Allo Mem GBh"] = "Total allocated memory time of all jobs, in GB-hours"
+
+        custom_items["% Jobs Can Incr Mem"] = "Percentage of jobs that enabled the retry_request_memory feature"
+        custom_items["% Jobs Est Incr'd Mem"] = "Estimate of the percentage of jobs that increased their requested memory"
+        custom_items["Avg Mem Incr Factor"] = "Estimate of the factor by which jobs increased their requested memory"
 
         custom_items["Min/25%/Median/75%/Max/Mean/Std Util% Mem"] = r"Final execution memory utility (% used/allocated)"
         custom_items["Min/25%/Median/75%/Max/Mean/Std Allo Mem GBh"] = "Allocated memory time (using final execution memory request) in GB-hours"
