@@ -22,6 +22,10 @@ DEFAULT_COLUMNS = {
     30: "Total Unuse Mem GBh",
     35: "Total Allo Mem GBh",
 
+    50: "% Jobs Can Incr Mem",
+    55: "% Jobs Est Incr'd Mem",
+    60: "Avg Mem Incr Factor",
+
     100: "&nbsp;",
 
     110: "Min Util% Mem",
@@ -107,6 +111,8 @@ DEFAULT_FILTER_ATTRS = [
 # INSTITUTION_DB = get_institution_database()
 # RESOURCE_DATA = get_topology_resource_data()
 
+
+TRANSFORM_REQUEST_MEMORY_RE = re.compile(r"REQUIREMENTS.*SET RequestMemory ([0-9]+)")
 
 class OsgScheddResourcesFilter(BaseFilter):
     name = "OSPool resource usage"
@@ -413,6 +419,27 @@ class OsgScheddResourcesFilter(BaseFilter):
         # Count number of history ads (i.e. number of unique job ids)
         o["_NumJobs"].append(1)
 
+        # Count number of jobs using the request memory bump feature
+        increase_memory_expr = i.get("TransformBody_RequestMemory", "")
+        can_increase_memory = increase_memory_expr != ""
+        possible_vacates_due_to_resources = i.get("NumVacatesbyReason.JobOutOfResources", 0) + i.get("NumVacatesByReason.StartdHeldJob", 0)
+        memory_increase_factor = None
+        increased_memory = False
+        if can_increase_memory:
+            try:
+                request_memory = int(i.get("RequestMemory"))
+                target_memory = int(TRANSFORM_REQUEST_MEMORY_RE.match(increase_memory_expr).group(1))
+                if target_memory > request_memory:
+                    memory_increase_factor = target_memory / request_memory
+                else:
+                    increased_memory = True
+            except (ValueError, AttributeError,):
+                increased_memory = possible_vacates_due_to_resources > 0
+
+        o["_NumJobsCanBumpRequestMemory"].append(int(can_increase_memory))
+        o["_NumJobsIncreasedRequestMemory"].append(int(increased_memory))
+        o["_RequestMemoryIncreaseFactor"].append(memory_increase_factor)
+
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
             o[attr].append(i.get(attr, None))
@@ -682,8 +709,19 @@ class OsgScheddResourcesFilter(BaseFilter):
         # # Compute derivative columns
         if row["Num Uniq Job Ids"] > 0:
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
+            # Memory increase feature columns
+            row["% Jobs Can Incr Mem"] = 100 * sum(data["_NumJobsCanBumpRequestMemory"]) / row["Num Uniq Job Ids"]
+            row["% Jobs Est Incr'd Mem"] = 100 * sum(data["_NumJobsIncreasedRequestMemory"]) / row["Num Uniq Job Ids"]
         else:
             row["% Short Jobs"] = 0
+            # Memory increase feature columns
+            row["% Jobs Can Incr Mem"] = row["% Jobs Est Incr'd Mem"] = 0
+
+        memory_increase_factors = self.clean(data["_RequestMemoryIncreaseFactor"])
+        if len(memory_increase_factors) > 0:
+            row["Avg Mem Incr Factor"] = sum(memory_increase_factors) / len(memory_increase_factors)
+        else:
+            row["Avg Mem Incr Factor"] = ""
 
         # Compute percentiles and stats
         if len(long_times_sorted) > 0:
