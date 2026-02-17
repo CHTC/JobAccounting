@@ -83,6 +83,10 @@ class OsgScheddCpuFormatter(BaseFormatter):
             "Num Jobs w/>1 Exec Att",
             "Num Jobs w/1+ Holds",
             "Num Short Jobs",
+            "% Shadw w/o Start CSV",
+            "% Shadw Input Fail CSV",
+            "Num Shadows w/o Start",
+            r"% of All Shadow Fails",
             "Num Shadow Starts Post 24.11.1",
             "Num TransferInputError",
             "Num Jobs Post 24.11.1",
@@ -95,14 +99,14 @@ class OsgScheddCpuFormatter(BaseFormatter):
     def format_rows(self, header, rows, custom_fmts={}, default_text_fmt=None, default_numeric_fmt=None):
         custom_fmts = {
             "PI Institution": lambda x: f'<td class="text">{compact_institution(x)}</td>',
-            "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Med Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "75% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "95% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
-            "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
-            "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Min Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "25% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Med Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "75% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "95% Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Max Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
+            # "Mean Hrs":   lambda x: f"<td>{hhmm(x)}</td>",
+            # "Std Hrs":    lambda x: f"<td>{hhmm(x)}</td>",
             "Mean Actv Hrs": lambda x: f"<td>{hhmm(x)}</td>",
             "CPU Hours / Bad Exec Att": lambda x: f"<td>{float(x):.1f}</td>",
             "Shadw Starts / Job Id":    lambda x: f"<td>{float(x):.2f}</td>",
@@ -147,7 +151,7 @@ class OsgScheddCpuFormatter(BaseFormatter):
         custom_items["Max Used Mem MB"]  = "Maximum measured memory usage across all submitted jobs' last execution attempts in MB"
         custom_items["Max Rqst Cpus"]    = "Maximum number of CPUs requested across all submitted jobs"
 
-        custom_items["Num Shadw Starts"] = "Total times a condor_shadow was spawned across all submitted jobs (excluding Local and Scheduler Universe jobs)"
+        custom_items["Num Shadow Starts"] = "Total times a condor_shadow was spawned across all submitted jobs (excluding Local and Scheduler Universe jobs)"
         custom_items["Num Exec Atts"]    = "Total number of execution attempts (excluding Local and Scheduler Universe jobs)"
         custom_items["Num Rm'd Jobs"]    = "Number of jobs that were removed from the queue instead of allowing to complete"
         custom_items["Num Short Jobs"]   = "Number of execution attempts that completed in less than 60 seconds"
@@ -171,10 +175,11 @@ class OsgScheddCpuFormatter(BaseFormatter):
         custom_items["% Jobs using S'ty"] = "Percent of Num Uniq Job Ids that requested to run inside a Singularity image"
         custom_items["% Ckpt Able"] = "Percent of Num Uniq Job Ids that may be using user-level checkpointing"
 
-        custom_items["Mean Actv Hrs"] = "Mean slot activation time (in hours)"
-        custom_items["Mean Setup Secs"] = "Mean slot activation setup time (in seconds). The slot activation setup time is the duration from when a shadow sends a claim activation to when the shadow is told that a job's executable is running."
+        custom_items["Mean Actv Hrs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationDuration">slot activation time</a> (in hours)"""
+        custom_items["Mean Setup Secs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationSetupDuration">slot activation setup time</a> (in seconds). The slot activation setup time is the duration from when a shadow sends a claim activation to when the shadow is told that a job's executable is running."""
+        custom_items["Mean Strip Secs"] = """Mean <a href="https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html#ActivationTeardownDuration">slot teardown time</a> (in seconds)"""
 
-        custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
+        # custom_items["Min/25%/Median/75%/Max/Mean/Std Hrs"] = "Final execution wallclock hours that a non-short job (Min-Max) or jobs (Mean/Std) ran for (excluding Short jobs, excluding Local and Scheduler Universe jobs)"
 
         custom_items["Input Files / Exec Att"] = "Number of files (all protocols) sent as part of the input sandbox per job start"
         custom_items["Input MB / Exec Att"] = "Average size (in MB) of input sandboxes"

@@ -42,8 +42,8 @@ ELASTICSEARCH_ARGS = {
 UWDF_FILES_TRANSFERRED_SRC = r"""
 long files = 0;
 for (key in ["transferinputstats", "transferoutputstats"]) {
-  if (doc.containsKey(key) && doc[key + ".keyword"].size() > 0) {
-    def matcher = /PelicanFilesCountTotal\D+(\d+)[,}]/i.matcher(doc[key + ".keyword"].value);
+  if (params._source.containsKey(key) && params._source[key].length() > 0) {
+    def matcher = /PelicanFilesCountTotal\D+(\d+)[,}]/i.matcher(params._source[key]);
     while (matcher.find()) {
       files += Long.parseLong(matcher.group(1));
     }
@@ -55,8 +55,8 @@ emit(files);
 UWDF_GB_TRANSFERRED_SRC = r"""
 double gb = 0;
 for (key in ["transferinputstats", "transferoutputstats"]) {
-  if (doc.containsKey(key) && doc[key + ".keyword"].size() > 0) {
-    def matcher = /PelicanSizeBytesTotal\D+(\d+)[,}]/i.matcher(doc[key + ".keyword"].value);
+  if (params._source.containsKey(key) && params._source[key].length() > 0) {
+    def matcher = /PelicanSizeBytesTotal\D+(\d+)[,}]/i.matcher(params._source[key]);
     while (matcher.find()) {
       gb += (double)Long.parseLong(matcher.group(1)) / 1e9;
     }
@@ -321,7 +321,7 @@ def main():
 
     cols = ["project", "files_transferred", "gb_transferred", "jobs"]
     hdrs = ["Project", "Files"            , "GBs"           , "Jobs"]
-    fmts = ["s"      , ",d"               , ",.3f"          , ",d"]
+    fmts = ["s"      , ",d"               , ",.0f"          , ",d"]
     stys = ["text" if fmt == "s" else "num" for fmt in fmts]
 
     hdrs = dict(zip(cols, hdrs))

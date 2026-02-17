@@ -1,4 +1,5 @@
 import re
+import time
 import htcondor
 import pickle
 from pathlib import Path
@@ -34,9 +35,9 @@ DEFAULT_COLUMNS = {
     81: "% Jobs Over Rqst Disk",
     82: "% Jobs using S'ty",
 
-    110: "Min Hrs",
-    150: "Max Hrs",
-    160: "Mean Hrs",
+    100: "Mean Actv Hrs",
+    105: "Mean Setup Secs",
+    107: "Mean Strip Secs",
 
     180: "Input Files / Exec Att",
 #    181: "Input MB / Exec Att",
@@ -75,6 +76,8 @@ DEFAULT_COLUMNS = {
 INSTITUTION_DB = get_institution_database()
 RESOURCE_DATA = get_topology_resource_data()
 
+QDATE_MIN_24_11_1 = 1754974800  # approx 24.11 rc release
+
 
 class OsgScheddCpuMonthlyFilter(BaseFilter):
     name = "OSG schedd job history"
@@ -83,6 +86,10 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         self.collector_hosts = {"cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"}
         self.schedd_collector_host_map_pickle = Path("ospool-host-map.pkl")
         self.schedd_collector_host_map = {}
+        self.schedd_vacate_reasons_version_qdates_pickle = Path("ospool-ap-qdate-vacate-reasons-version.pkl")
+        self.schedd_vacate_reasons_version_qdates = {}
+        self.index = kwargs.get("es_index", "osg_schedd_write")
+        self.client = self.connect(**kwargs)
         if self.schedd_collector_host_map_pickle.exists():
             try:
                 self.schedd_collector_host_map = pickle.load(open(self.schedd_collector_host_map_pickle, "rb"))
@@ -91,6 +98,93 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         super().__init__(**kwargs)
         self.sort_col = "Num Uniq Job Ids"
         self.topology_project_map = get_topology_project_data()
+        self.schedd_vacate_reasons_version_qdates = self.query_schedd_vacate_reasons_version_qdates()
+
+
+    def query_schedd_vacate_reasons_version_qdates(self):
+        if (
+            self.schedd_vacate_reasons_version_qdates_pickle.exists() and
+            self.schedd_vacate_reasons_version_qdates_pickle.stat().st_mtime > (time.time() - (24*3600+300))
+        ):
+            try:
+                return pickle.load(self.schedd_vacate_reasons_version_qdates_pickle.open("rb"))
+            except IOError:
+                pass
+        self.logger.debug(f"Querying for QDates per AP where CondorVersion > 24.11.1...")
+        t0 = time.time()
+        query = {
+            "size": 0,
+            "runtime_mappings": {
+                "GoodVersion": {
+                    "type": "boolean",
+                    "script": {
+                        "source": r"""
+                        int major = 0;
+                        int minor = 0;
+                        int revision = 0;
+                        int version = 0;
+                        int target = 241101;
+                        Pattern versionPattern = /\$CondorVersion: (\d+)\.(\d+)\.(\d+) .*/;
+                        if (doc.containsKey("CondorVersion") && doc["CondorVersion.keyword"].size() > 0) {
+                            Matcher versionMatcher = versionPattern.matcher(doc["CondorVersion.keyword"].value);
+                            if (versionMatcher.matches()) {
+                            major = Integer.parseInt(versionMatcher.group(1));
+                            minor = Integer.parseInt(versionMatcher.group(2));
+                            revision = Integer.parseInt(versionMatcher.group(3));
+                            version = major * 10000 + minor * 100 + revision;
+                            }
+                        }
+                        emit(version >= target);
+                        """
+                    }
+                }
+            },
+            "aggs": {
+                "Schedds": {
+                    "terms": {
+                        "field": "ScheddName.keyword",
+                        "size": 64
+                    },
+                    "aggs": {
+                        "FirstQDate": {
+                            "min": {
+                                "field": "QDate"
+                            }
+                        }
+                    }
+                }
+            },
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "range": {
+                                "RecordTime": {
+                                    "gte": QDATE_MIN_24_11_1
+                                }
+                            }
+                        },
+                        {
+                            "term": {
+                                "GoodVersion": True
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        result = self.client.search(index=self.index, body=query, request_timeout=300)
+        self.logger.debug(f"Querying for QDates per AP where CondorVersion > 24.11.1... done after {int(time.time() - t0)} seconds")
+        schedd_vacate_reasons_version_qdates = {
+            bucket["key"]: int(bucket["FirstQDate"]["value"])
+            for bucket in result["aggregations"]["Schedds"]["buckets"]
+        }
+        try:
+            pickle.dump(schedd_vacate_reasons_version_qdates, self.schedd_vacate_reasons_version_qdates_pickle.open("wb"))
+        except IOError:
+            self.logger.exception(f"Could not cache the QDates per AP ... on disk, continuing anyway")
+        return schedd_vacate_reasons_version_qdates
+
 
     def schedd_collector_host(self, schedd):
         # Query Schedd ad in Collector for its CollectorHost,
@@ -215,7 +309,9 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         )
         long_job_wallclock_time = int(is_long) * i.get("LastRemoteWallClockTime", i.get("CommittedTime", 60))
         has_num_vacates_by_reason = False
-        if tuple(int(x) for x in i.get("CondorVersion", "_ 0.0.0").split()[1].split(".")) >= (24, 11, 1):
+        cv = tuple(int(x) for x in i.get("CondorVersion", "_ 0.0.0").split()[1].split("."))
+        schedd_vacate_reasons_version_qdate = self.schedd_vacate_reasons_version_qdates.get(i.get("ScheddName"), 1e64)
+        if cv >= (24, 11, 1) or i.get("QDate", 0) >= schedd_vacate_reasons_version_qdate:
             has_num_vacates_by_reason = True
 
         sum_cols = {}
@@ -230,7 +326,7 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["SingularityJobs"] = int(is_singularity)
         sum_cols["OverDiskJobs"] = int(is_over_disk_request)
 
-        sum_cols["TotalLongJobWallClockTime"] = long_job_wallclock_time
+        # sum_cols["TotalLongJobWallClockTime"] = long_job_wallclock_time
         sum_cols["GoodCpuTime"] = (goodput_time * max(i.get("RequestCpus", 1), 1))
         sum_cols["CpuTime"] = (i.get("RemoteWallClockTime", 0) * max(i.get("RequestCpus", 1), 1))
         sum_cols["BadCpuTime"] = ((i.get("RemoteWallClockTime", 0) - goodput_time) * max(i.get("RequestCpus", 1), 1))
@@ -256,8 +352,16 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["NumShadowsWithVacatesByReason"] = int(has_num_vacates_by_reason) * i.get("NumShadowStarts", 0)
         sum_cols["NumVacatesTransferInputError"] = i.get("NumVacatesByReason", {}).get("TransferInputError", 0)
 
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        for col in ["ActivationDuration", "ActivationSetupDuration", "ActivationTeardownDuration"]:
+            sum_cols[col] = sum_cols[f"Num{col}"] = 0
+            value = i.get(col)
+            if value is not None and value < activation_limit:
+                sum_cols[col] = value
+                sum_cols[f"Num{col}"] = 1
+
         max_cols = {}
-        max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
+        # max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
         max_cols["MaxRequestMemory"] = i.get("RequestMemory", 0)
         max_cols["MaxMemoryUsage"] = i.get("MemoryUsage", 0)
         max_cols["MaxRequestDisk"] = i.get("RequestDisk", 0)
@@ -266,7 +370,7 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         max_cols["MaxJobUnits"] = job_units
 
         min_cols = {}
-        min_cols["MinLongJobWallClockTime"] = long_job_wallclock_time
+        # min_cols["MinLongJobWallClockTime"] = long_job_wallclock_time
 
         for col in sum_cols:
             o[col] = (o.get(col) or 0) + sum_cols[col]
@@ -451,15 +555,16 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
 
-        if data["LongJobs"] > 0:
-            row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-            row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-            row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        else:
-            row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
+        if data["NumActivationDuration"] > 0:
+            row["Mean Actv Hrs"] = (data["ActivationDuration"] / data["NumActivationDuration"]) / 3600
+        if data["NumActivationSetupDuration"] > 0:
+            row["Mean Setup Secs"] = data["ActivationSetupDuration"] / data["NumActivationSetupDuration"]
+        if data["NumActivationTeardownDuration"] > 0:
+            row["Mean Strip Secs"] = data["ActivationTeardownDuration"] / data["NumActivationTeardownDuration"]
 
-        row["Num Users"]        = len(data["Users"])
-        row["Num Sites"]        = len(data["Sites"])
+        row["Num Users"] = len(data["Users"])
+        row["Num Sites"] = len(data["Sites"])
 
         return row
 
@@ -559,12 +664,13 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         row["Num TransferInputError"] = data["NumVacatesTransferInputError"]
         row["Num Jobs Post 24.11.1"] = data["NumJobsWithVacatesByReason"]
 
-        if data["LongJobs"] > 0:
-            row["Min Hrs"]  = data["MinLongJobWallClockTime"] / 3600
-            row["Max Hrs"]  = data["MaxLongJobWallClockTime"] / 3600
-            row["Mean Hrs"] = (data["TotalLongJobWallClockTime"] / data["LongJobs"]) / 3600
-        else:
-            row["Min Hrs"] = row["Max Hrs"] = row["Mean Hrs"] = 0
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
+        if data["NumActivationDuration"] > 0:
+            row["Mean Actv Hrs"] = (data["ActivationDuration"] / data["NumActivationDuration"]) / 3600
+        if data["NumActivationSetupDuration"] > 0:
+            row["Mean Setup Secs"] = data["ActivationSetupDuration"] / data["NumActivationSetupDuration"]
+        if data["NumActivationTeardownDuration"] > 0:
+            row["Mean Strip Secs"] = data["ActivationTeardownDuration"] / data["NumActivationTeardownDuration"]
 
         # Compute mode for Project and Schedd columns in the Users table
         if agg == "Users":

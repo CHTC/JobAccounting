@@ -1,12 +1,12 @@
 
 import re
 import sys
+import time
 import pickle
 import statistics as stats
-from datetime import date
 from pathlib import Path
 from .BaseFilter import BaseFilter
-from accounting.functions import get_topology_resource_data, get_institution_database
+from accounting.functions import get_topology_project_data, get_topology_resource_data, get_institution_database
 
 try:
     import htcondor2 as htcondor
@@ -20,7 +20,9 @@ except ImportError:
 
 
 DEFAULT_COLUMNS = {
-    10: "Num Uniq Job Ids",
+     5: "% Shadw w/o Start",
+     6: "% Shadw Input Fail",
+    15: "Num Uniq Job Ids",
     20: "All CPU Hours",
     25: "All GPU Hours",
     30: "% Good CPU Hours",
@@ -42,6 +44,10 @@ DEFAULT_COLUMNS = {
     81: "% Jobs Over Rqst Disk",
     82: "% Jobs using S'ty",
 
+    100: "Mean Actv Hrs",
+    105: "Mean Setup Secs",
+    107: "Mean Strip Secs",
+
     110: "Min Hrs",
     120: "25% Hrs",
     130: "Med Hrs",
@@ -62,13 +68,15 @@ DEFAULT_COLUMNS = {
     303: "Good GPU Hours",
     305: "CPU Hours / Bad Exec Att",
     307: "GPU Hours / Bad Exec Att",
-    310: "Num Exec Atts",
-    320: "Num Shadw Starts",
+    325: "Num Job Holds",
     330: "Num Rm'd Jobs",
     340: "Num DAG Node Jobs",
     350: "Num Jobs w/>1 Exec Att",
+    355: "Num Jobs w/1+ Holds",
+    357: "Num Jobs Over Rqst Disk",
     360: "Num Short Jobs",
     390: "Num Ckpt Able Jobs",
+    400: "Num S'ty Jobs",
 
     500: "Max Rqst Mem MB",
     510: "Med Used Mem MB",
@@ -77,6 +85,12 @@ DEFAULT_COLUMNS = {
     527: "Max Used Disk GB",
     530: "Max Rqst Cpus",
     540: "Max Rqst Gpus",
+
+    600: "Num Job Starts",
+    610: "Num Shadow Starts",
+    620: "Num Shadow Starts Post 24.11.1",
+    630: "Num TransferInputError",
+    640: "Num Jobs Post 24.11.1",
 }
 
 
@@ -104,12 +118,18 @@ DEFAULT_FILTER_ATTRS = [
     "SingularityImage",
     "ActivationDuration",
     "ActivationSetupDuration",
+    "ActivationTeardownDuration",
     "CondorVersion",
+    "NumVacatesByReason",
+    "QDate",
+    "ScheddName",
 ]
 
 
 INSTITUTION_DB = get_institution_database()
 RESOURCE_DATA = get_topology_resource_data()
+
+QDATE_MIN_24_11_1 = 1754974800  # approx 24.11 rc release
 
 
 class OsgScheddGpuFilter(BaseFilter):
@@ -119,6 +139,10 @@ class OsgScheddGpuFilter(BaseFilter):
         self.collector_hosts = {"cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"}
         self.schedd_collector_host_map_pickle = Path("ospool-host-map.pkl")
         self.schedd_collector_host_map = {}
+        self.schedd_vacate_reasons_version_qdates_pickle = Path("ospool-ap-qdate-vacate-reasons-version.pkl")
+        self.schedd_vacate_reasons_version_qdates = {}
+        self.index = kwargs.get("es_index", "osg_schedd_write")
+        self.client = self.connect(**kwargs)
         if self.schedd_collector_host_map_pickle.exists():
             try:
                 self.schedd_collector_host_map = pickle.load(open(self.schedd_collector_host_map_pickle, "rb"))
@@ -126,6 +150,94 @@ class OsgScheddGpuFilter(BaseFilter):
                 pass
         super().__init__(**kwargs)
         self.sort_col = "Num Uniq Job Ids"
+        self.topology_project_map = get_topology_project_data()
+        self.schedd_vacate_reasons_version_qdates = self.query_schedd_vacate_reasons_version_qdates()
+
+
+    def query_schedd_vacate_reasons_version_qdates(self):
+        if (
+            self.schedd_vacate_reasons_version_qdates_pickle.exists() and
+            self.schedd_vacate_reasons_version_qdates_pickle.stat().st_mtime > (time.time() - (24*3600+300))
+        ):
+            try:
+                return pickle.load(self.schedd_vacate_reasons_version_qdates_pickle.open("rb"))
+            except IOError:
+                pass
+        self.logger.debug(f"Querying for QDates per AP where CondorVersion > 24.11.1...")
+        t0 = time.time()
+        query = {
+            "size": 0,
+            "runtime_mappings": {
+                "GoodVersion": {
+                    "type": "boolean",
+                    "script": {
+                        "source": r"""
+                        int major = 0;
+                        int minor = 0;
+                        int revision = 0;
+                        int version = 0;
+                        int target = 241101;
+                        Pattern versionPattern = /\$CondorVersion: (\d+)\.(\d+)\.(\d+) .*/;
+                        if (doc.containsKey("CondorVersion") && doc["CondorVersion.keyword"].size() > 0) {
+                            Matcher versionMatcher = versionPattern.matcher(doc["CondorVersion.keyword"].value);
+                            if (versionMatcher.matches()) {
+                            major = Integer.parseInt(versionMatcher.group(1));
+                            minor = Integer.parseInt(versionMatcher.group(2));
+                            revision = Integer.parseInt(versionMatcher.group(3));
+                            version = major * 10000 + minor * 100 + revision;
+                            }
+                        }
+                        emit(version >= target);
+                        """
+                    }
+                }
+            },
+            "aggs": {
+                "Schedds": {
+                    "terms": {
+                        "field": "ScheddName.keyword",
+                        "size": 64
+                    },
+                    "aggs": {
+                        "FirstQDate": {
+                            "min": {
+                                "field": "QDate"
+                            }
+                        }
+                    }
+                }
+            },
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "range": {
+                                "RecordTime": {
+                                    "gte": QDATE_MIN_24_11_1
+                                }
+                            }
+                        },
+                        {
+                            "term": {
+                                "GoodVersion": True
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        result = self.client.search(index=self.index, body=query, request_timeout=300)
+        self.logger.debug(f"Querying for QDates per AP where CondorVersion > 24.11.1... done after {int(time.time() - t0)} seconds")
+        schedd_vacate_reasons_version_qdates = {
+            bucket["key"]: int(bucket["FirstQDate"]["value"])
+            for bucket in result["aggregations"]["Schedds"]["buckets"]
+        }
+        try:
+            pickle.dump(schedd_vacate_reasons_version_qdates, self.schedd_vacate_reasons_version_qdates_pickle.open("wb"))
+        except IOError:
+            self.logger.exception(f"Could not cache the QDates per AP ... on disk, continuing anyway")
+        return schedd_vacate_reasons_version_qdates
+
 
     def get_query(self, index, start_ts, end_ts, **kwargs):
         # Returns dict matching Elasticsearch.search() kwargs
@@ -180,6 +292,7 @@ class OsgScheddGpuFilter(BaseFilter):
                 except htcondor.HTCondorIOError:
                     continue
                 collectors_queried.add(collector_host)
+                ads = list(ads)
                 if len(ads) == 0:
                     continue
                 if len(ads) > 1:
@@ -275,7 +388,7 @@ class OsgScheddGpuFilter(BaseFilter):
 
         # Add custom attrs to the list of attrs
         filter_attrs = DEFAULT_FILTER_ATTRS.copy()
-        filter_attrs = filter_attrs + ["ScheddName", "ProjectName"]
+        filter_attrs = filter_attrs + ["ProjectName"]
 
         # Count number of DAGNode Jobs
         if i.get("DAGNodeName") is not None:
@@ -435,16 +548,17 @@ class OsgScheddGpuFilter(BaseFilter):
         # Add Project and Schedd columns to the Users table
         columns = DEFAULT_COLUMNS.copy()
         if agg == "Users":
-            columns[5] = "Most Used Project"
+            columns[4] = "Most Used Project"
             columns[175] = "Most Used Schedd"
         if agg == "Projects":
-            columns[5] = "Num Users"
-            columns[6] = "Num Site Instns"
-            columns[7] = "Num Sites"
+            columns[4] = "PI Institution"
+            columns[10] = "Num Users"
+            columns[11] = "Num Site Instns"
+            columns[12] = "Num Sites"
         if agg == "Institution":
-            columns[4] = "Num Sites"
-            columns[5] = "Num Users"
-            rm_columns = [30,35,45,50,51,52,53,54,55,56,57,70,80,180,181,190,191,300,303,305,307,310,320,330,340,350,390]
+            columns[10] = "Num Sites"
+            columns[11] = "Num Users"
+            rm_columns = [5,6,30,35,45,50,51,52,53,54,55,56,57,70,80,180,181,190,191,300,303,305,307,325,330,340,350,355,390,600,610,620,630,640]
             [columns.pop(key) for key in rm_columns if key in columns]
         return columns
 
@@ -504,25 +618,6 @@ class OsgScheddGpuFilter(BaseFilter):
         long_times_sorted = self.clean(long_times_sorted)
         long_times_sorted.sort()
 
-        # Activation metrics added in 9.4.1
-        # Added to the OSG Connect access points at 1640100600
-        activation_durations = []
-        setup_durations = []
-        act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
-        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
-                data["JobStartDate"],
-                data["JobCurrentStartDate"],
-                data["ActivationDuration"],
-                data["ActivationSetupDuration"]):
-            start_date = current_start_date or start_date
-            if None in [start_date, activation_duration, setup_duration]:
-                continue
-            if ((start_date > act_cutoff_date) and
-                (activation_duration < (act_cutoff_date - 24*3600) and
-                (setup_duration < (act_cutoff_date - 24*3600)))):
-                activation_durations.append(activation_duration)
-                setup_durations.append(setup_duration)
-
         # Compute columns
         row["All CPU Hours"]    = sum(self.clean(goodput_cpu_time)) / 3600
         row["All GPU Hours"]    = sum(self.clean(goodput_gpu_time)) / 3600
@@ -550,12 +645,17 @@ class OsgScheddGpuFilter(BaseFilter):
             row["% Jobs using S'ty"] = 0
 
         # Compute activation time stats
-        row["Mean Actv Hrs"] = ""
-        row["Mean Setup Secs"] = ""
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        activation_durations = [d for d in self.clean(data["ActivationDuration"]) if d < activation_limit]
+        setup_durations = [d for d in self.clean(data["ActivationSetupDuration"]) if d < activation_limit]
+        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < activation_limit]
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if len(activation_durations) > 0:
             row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
         if len(setup_durations) > 0:
             row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
+        if len(teardown_durations) > 0:
+            row["Mean Strip Secs"] = sum(teardown_durations) / len(teardown_durations)
 
         # Compute time percentiles and stats
         if len(long_times_sorted) > 0:
@@ -736,24 +836,31 @@ class OsgScheddGpuFilter(BaseFilter):
                 output_files_total_bytes.append(output_files_bytes)
                 output_files_total_job_stops.append(1)
 
-        # Activation metrics added in 9.4.1
-        # Added to the OSG Connect access points at 1640100600
-        activation_durations = []
-        setup_durations = []
-        act_cutoff_date = 1_640_100_600  # 2021-12-21 09:30:00
-        for (start_date, current_start_date, activation_duration, setup_duration) in zip(
-                data["JobStartDate"],
-                data["JobCurrentStartDate"],
-                data["ActivationDuration"],
-                data["ActivationSetupDuration"]):
-            start_date = current_start_date or start_date
-            if None in [start_date, activation_duration, setup_duration]:
+        # NumVacatesByReason added in 24.11.1
+        num_vacates_by_reason_exists = 0
+        num_vacates_shadows = 0
+        num_vacates_transferinputerror = 0
+        for (
+            qdate,
+            schedd,
+            condor_version,
+            num_vacates_by_reason,
+            num_shadow_starts_temp,
+        ) in zip(
+            data["QDate"],
+            data["ScheddName"],
+            data["CondorVersion"],
+            data["NumVacatesByReason"],
+            data["NumShadowStarts"],
+        ):
+            cv = tuple(int(x) for x in condor_version.split()[1].split("."))
+            if not (qdate >= self.schedd_vacate_reasons_version_qdates.get(schedd, 1e64) or cv >= (24, 11, 1)):
                 continue
-            if ((start_date > act_cutoff_date) and
-                (activation_duration < (act_cutoff_date - 24*3600) and
-                (setup_duration < (act_cutoff_date - 24*3600)))):
-                activation_durations.append(activation_duration)
-                setup_durations.append(setup_duration)
+            num_vacates_by_reason_exists += 1
+            if num_shadow_starts_temp is not None:
+                num_vacates_shadows += num_shadow_starts_temp
+            if num_vacates_by_reason is not None and "TransferInputError" in num_vacates_by_reason:
+                num_vacates_transferinputerror += num_vacates_by_reason["TransferInputError"]
 
         # Compute columns
         row["All CPU Hours"]    = sum(self.clean(total_cpu_time)) / 3600
@@ -777,7 +884,8 @@ class OsgScheddGpuFilter(BaseFilter):
         row["Max Rqst Cpus"]    = max(self.clean(data["RequestCpus"], allow_empty_list=False))
         row["Max Rqst Gpus"]    = max(self.clean(data["RequestGpus"], allow_empty_list=False))
         row["Num Exec Atts"]    = sum(self.clean(num_exec_attempts))
-        row["Num Shadw Starts"] = sum(self.clean(num_shadow_starts))
+        row["Num Job Starts"]    = sum(self.clean(num_exec_attempts))
+        row["Num Shadow Starts"] = sum(self.clean(num_shadow_starts))
         row["Num Ckpt Able Jobs"]  = sum(data["_NumCkptJobs"])
         row["Num S'ty Jobs"]       = len(self.clean(data["SingularityImage"]))
 
@@ -791,7 +899,7 @@ class OsgScheddGpuFilter(BaseFilter):
         else:
             row["% Good GPU Hours"] = 0
         if row["Num Uniq Job Ids"] > 0:
-            row["Shadw Starts / Job Id"] = row["Num Shadw Starts"] / row["Num Uniq Job Ids"]
+            row["Shadw Starts / Job Id"] = row["Num Shadow Starts"] / row["Num Uniq Job Ids"]
             row["Holds / Job Id"] = row["Num Job Holds"] / row["Num Uniq Job Ids"]
             row["% Rm'd Jobs"] = 100 * row["Num Rm'd Jobs"] / row["Num Uniq Job Ids"]
             row["% Short Jobs"] = 100 * row["Num Short Jobs"] / row["Num Uniq Job Ids"]
@@ -809,16 +917,28 @@ class OsgScheddGpuFilter(BaseFilter):
             row["% Jobs w/1+ Holds"] = 0
             row["% Jobs Over Rqst Disk"] = 0
             row["% Jobs using S'ty"] = 0
-        if row["Num Shadw Starts"] > 0:
-            row["Exec Atts / Shadw Start"] = row["Num Exec Atts"] / row["Num Shadw Starts"]
+        if row["Num Shadow Starts"] > 0:
+            row["% Shadw w/o Start"] = 100 * max(row["Num Shadow Starts"] - row["Num Job Starts"], 0) / row["Num Shadow Starts"]
+            row["Exec Atts / Shadw Start"] = row["Num Job Starts"] / row["Num Shadow Starts"]
         else:
+            row["% Shadw w/o Start"] = 0
             row["Exec Atts / Shadw Start"] = 0
+        if num_vacates_shadows > 0:
+            row["% Shadw Input Fail"] = 100 * num_vacates_transferinputerror / num_vacates_shadows
+        elif num_vacates_by_reason_exists > 0:
+            row["% Shadw Input Fail"] = 0
+        else:
+            row["% Shadw Input Fail"] = "-"
         if sum(data["_NumBadJobStarts"]) > 0:
             row["CPU Hours / Bad Exec Att"] = (sum(self.clean(badput_cpu_time)) / 3600) / sum(data["_NumBadJobStarts"])
             row["GPU Hours / Bad Exec Att"] = (sum(self.clean(badput_gpu_time)) / 3600) / sum(data["_NumBadJobStarts"])
         else:
             row["CPU Hours / Bad Exec Att"] = 0
             row["GPU Hours / Bad Exec Att"] = 0
+
+        row["Num Shadow Starts Post 24.11.1"] = num_vacates_shadows
+        row["Num TransferInputError"] = num_vacates_transferinputerror
+        row["Num Jobs Post 24.11.1"] = num_vacates_by_reason_exists
 
         # File transfer stats
         total_files = 0
@@ -857,13 +977,14 @@ class OsgScheddGpuFilter(BaseFilter):
 
         if osdf_files_count == 0 or osdf_bytes_total == 0:
             condor_versions_set = set(data["CondorVersion"])
+            condor_versions_set.discard(None)
             condor_versions_tuples_list = []
             for version in condor_versions_set:
                 condor_versions_tuples_list.append(tuple([int(x) for x in version.split()[1].split(".")]))
             if all(condor_version_tuple < (9, 7, 0) for condor_version_tuple in condor_versions_tuples_list):
                 row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = "-"
             else:
-                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0                    
+                row["OSDF Files Xferd"] = row["% OSDF Files"] = row["% OSDF Bytes"] = 0
         else:
             row["OSDF Files Xferd"] = osdf_files_count or ""
             if osdf_files_count > 0 and osdf_bytes_total > 0 and total_files > 0 and total_bytes > 0:
@@ -880,12 +1001,28 @@ class OsgScheddGpuFilter(BaseFilter):
             row[key] = row.get(key, -999)
 
         # Compute activation time stats
-        row["Mean Actv Hrs"] = ""
-        row["Mean Setup Secs"] = ""
+        activation_limit = 1_640_100_600  # 2021-12-21 09:30:00
+        activation_durations = [d for d in self.clean(data["ActivationDuration"]) if d < activation_limit]
+        setup_durations = [d for d in self.clean(data["ActivationSetupDuration"]) if d < activation_limit]
+        teardown_durations = [d for d in self.clean(data["ActivationTeardownDuration"]) if d < activation_limit]
+        row["Mean Actv Hrs"] = row["Mean Setup Secs"] = row["Mean Strip Secs"] = ""
         if len(activation_durations) > 0:
             row["Mean Actv Hrs"] = (sum(activation_durations) / len(activation_durations)) / 3600
         if len(setup_durations) > 0:
             row["Mean Setup Secs"] = sum(setup_durations) / len(setup_durations)
+        if len(teardown_durations) > 0:
+            row["Mean Strip Secs"] = sum(teardown_durations) / len(teardown_durations)
+
+        # Compute job unit metrics
+        row["Med Job Units"] = stats.median(self.clean(data["NumJobUnits"], allow_empty_list=False))
+        row["Max Job Units"] = max(self.clean(data["NumJobUnits"], allow_empty_list=False))
+        row["Job Unit Hours"] = sum(
+            job_units*wallclocktime/3600 for job_units, wallclocktime in zip(
+                data.get("NumJobUnits", []),
+                data.get("RemoteWallClockTime", []),
+            )
+            if job_units is not None
+        )
 
         # Compute time percentiles and stats
         if len(long_times_sorted) > 0:
@@ -922,5 +1059,10 @@ class OsgScheddGpuFilter(BaseFilter):
             row["Num Users"] = len(set(data["User"]))
             row["Num Site Instns"] = len(set(data["_Institutions"]))
             row["Num Sites"] = len(set(data["_Sites"]))
+            if agg_name != "TOTAL":
+                project_map = self.topology_project_map.get(agg_name.lower(), self.topology_project_map["UNKNOWN"])
+                row["PI Institution"] = project_map["institution"]
+            else:
+                row["PI Institution"] = ""
 
         return row

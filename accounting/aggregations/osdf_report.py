@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 import json
@@ -188,7 +189,7 @@ def get_endpoint_types(
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
-        query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
+        query = query.query(Q("wildcard", TransferUrl__indexed="*osdf://*") | Q("wildcard", TransferUrl__indexed="*pelican://osg-htc.org*"))
     endpoint_agg = A(
         "terms",
         field="Endpoint",
@@ -244,7 +245,7 @@ def get_endpoint_query(
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
-        query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
+        query = query.query(Q("wildcard", TransferUrl__indexed="*osdf://*") | Q("wildcard", TransferUrl__indexed="*pelican://osg-htc.org*"))
 
     # filter out jobs that did not run in the OSPool
     has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("terms", machineattrglidein_resourcename0__indexed=["Undefined", "2"])
@@ -265,7 +266,7 @@ def get_endpoint_query(
     return query
 
 
-def get_director_query(
+def get_plugin_attempt_query(
         client: elasticsearch.Elasticsearch,
         index: str,
         start: datetime,
@@ -280,7 +281,7 @@ def get_director_query(
                 .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
                 .filter("term", FinalAttempt=True)
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
-        query = query.query(Q("prefix", TransferUrl__indexed="osdf://") | Q("prefix", TransferUrl__indexed="pelican://osg-htc.org"))
+        query = query.query(Q("wildcard", TransferUrl__indexed="*osdf://*") | Q("wildcard", TransferUrl__indexed="*pelican://osg-htc.org*"))
 
     # filter out jobs that did not run in the OSPool
     has_resource_name = Q("exists", field="machineattrglidein_resourcename0.indexed") & ~Q("terms", machineattrglidein_resourcename0__indexed=["Undefined", "2"])
@@ -340,6 +341,15 @@ def convert_buckets_to_dict(buckets: list):
     return bucket_data
 
 
+def sum_buckets_matching(buckets: dict, pattern: str) -> int:
+    matcher = re.compile(pattern)
+    total = 0
+    for key, bucket in buckets.items():
+        if matcher.match(key):
+            total += bucket["value"]
+    return total
+
+
 if __name__ == "__main__":
     args = parse_args()
     es_args = {}
@@ -380,7 +390,7 @@ if __name__ == "__main__":
         end=args.end
     )
 
-    base_director_query = get_director_query(
+    base_plugin_attempt_query = get_plugin_attempt_query(
         client=es,
         index=index,
         start=args.start,
@@ -443,46 +453,46 @@ if __name__ == "__main__":
 
     final_notfilenotfound_attempt_failure_query = final_attempt_failure_query.query(~filenotfound_attempt_failure_filter)
 
-    director_failure_query = base_director_query.query(no_endpoint_filter)
+    director_failure_query = base_plugin_attempt_query.query(no_endpoint_filter)
 
     base_endpoint_query.aggs.bucket("transfer_type", transfer_type_agg)
-    base_endpoint_query.aggs.bucket("resource_name", resource_name_agg)
     base_endpoint_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     success_query.aggs.bucket("transfer_type", transfer_type_agg)
-    success_query.aggs.bucket("resource_name", resource_name_agg)
     success_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     final_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
-    final_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     final_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     all_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
-    all_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     all_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     filenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
-    filenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     filenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     final_filenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
-    final_filenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     final_filenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     notfilenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
-    notfilenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     notfilenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     final_notfilenotfound_attempt_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
-    final_notfilenotfound_attempt_failure_query.aggs.bucket("resource_name", resource_name_agg)
     final_notfilenotfound_attempt_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
-    base_director_query.aggs.bucket("transfer_type", transfer_type_agg)
-    base_director_query.aggs.bucket("resource_name", resource_name_agg)
-    base_director_query.aggs.metric("unique_jobs", num_jobs_agg)
+    base_plugin_attempt_query.aggs.bucket("transfer_type", transfer_type_agg)
+    base_plugin_attempt_query.aggs.metric("unique_jobs", num_jobs_agg)
 
+    error_type_agg = A(
+        "terms",
+        field="DebugErrorType",
+        size=32,
+        missing="Unknown",
+    )
+    error_type_agg.metric("unique_jobs", num_jobs_agg)
+    resource_name_agg.metric("error_type", error_type_agg)
+    transfer_type_agg.metric("error_type", error_type_agg)
     director_failure_query.aggs.bucket("transfer_type", transfer_type_agg)
-    director_failure_query.aggs.bucket("resource_name", resource_name_agg)
+    director_failure_query.aggs.bucket("error_type", error_type_agg)
     director_failure_query.aggs.metric("unique_jobs", num_jobs_agg)
 
     print(f"{datetime.now()} - Running queries")
@@ -511,7 +521,7 @@ if __name__ == "__main__":
         final_notfilenotfound_failed_attempts = final_notfilenotfound_attempt_failure_query.execute()
         time.sleep(1)
 
-        director_all_attempts = base_director_query.execute()
+        director_all_attempts = base_plugin_attempt_query.execute()
         time.sleep(1)
 
         director_failed_attempts = director_failure_query.execute()
@@ -524,34 +534,15 @@ if __name__ == "__main__":
     print(f"{datetime.now()} - Done.")
 
     all_transfer_type_data = convert_buckets_to_dict(all_attempts.aggregations.transfer_type.buckets)
-    all_resource_name_data = convert_buckets_to_dict(all_attempts.aggregations.resource_name.buckets)
-
     success_transfer_type_data = convert_buckets_to_dict(success_attempts.aggregations.transfer_type.buckets)
-    success_resource_name_data = convert_buckets_to_dict(success_attempts.aggregations.resource_name.buckets)
-
     final_failed_transfer_type_data = convert_buckets_to_dict(final_failed_attempts.aggregations.transfer_type.buckets)
-    final_failed_resource_name_data = convert_buckets_to_dict(final_failed_attempts.aggregations.resource_name.buckets)
-
     all_failed_transfer_type_data = convert_buckets_to_dict(all_failed_attempts.aggregations.transfer_type.buckets)
-    all_failed_resource_name_data = convert_buckets_to_dict(all_failed_attempts.aggregations.resource_name.buckets)
-
     filenotfound_failed_transfer_type_data = convert_buckets_to_dict(filenotfound_failed_attempts.aggregations.transfer_type.buckets)
-    filenotfound_failed_resource_name_data = convert_buckets_to_dict(filenotfound_failed_attempts.aggregations.resource_name.buckets)
-
     final_filenotfound_failed_transfer_type_data = convert_buckets_to_dict(final_filenotfound_failed_attempts.aggregations.transfer_type.buckets)
-    final_filenotfound_failed_resource_name_data = convert_buckets_to_dict(final_filenotfound_failed_attempts.aggregations.resource_name.buckets)
-
     notfilenotfound_failed_transfer_type_data = convert_buckets_to_dict(notfilenotfound_failed_attempts.aggregations.transfer_type.buckets)
-    notfilenotfound_failed_resource_name_data = convert_buckets_to_dict(notfilenotfound_failed_attempts.aggregations.resource_name.buckets)
-
     final_notfilenotfound_failed_transfer_type_data = convert_buckets_to_dict(final_notfilenotfound_failed_attempts.aggregations.transfer_type.buckets)
-    final_notfilenotfound_failed_resource_name_data = convert_buckets_to_dict(final_notfilenotfound_failed_attempts.aggregations.resource_name.buckets)
-
     director_all_transfer_type_data = convert_buckets_to_dict(director_all_attempts.aggregations.transfer_type.buckets)
-    director_all_resource_name_data = convert_buckets_to_dict(director_all_attempts.aggregations.resource_name.buckets)
-
     director_failed_transfer_type_data = convert_buckets_to_dict(director_failed_attempts.aggregations.transfer_type.buckets)
-    director_failed_resource_name_data = convert_buckets_to_dict(director_failed_attempts.aggregations.resource_name.buckets)
 
     empty_row = {"value": 0, "unique_jobs": 0}
 
@@ -664,6 +655,17 @@ if __name__ == "__main__":
                 except KeyError:
                     row[attempt_type] = 0
                     row[f"{attempt_type}_jobs"] = 0
+
+            if resource_name in director_failed_transfer_type_data[transfer_type]["resource_name"]:
+                row["director_contact_failed_attempts"] = sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["resource_name"][resource_name]["error_type"], r"Contact")
+                row["file_specification_failed_attempts"] = sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["resource_name"][resource_name]["error_type"], r"(Specification|Parameter)\.FileNotFound")
+                row["director_unknown_failed_attempts"] = sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["resource_name"][resource_name]["error_type"], r"(Unknown|Unprocessed)")
+                row["director_other_failed_attempts"] = \
+                    sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["resource_name"][resource_name]["error_type"], r".*") - \
+                    (row["director_contact_failed_attempts"] + row["file_specification_failed_attempts"] + row["director_unknown_failed_attempts"])
+            else:
+                row["director_contact_failed_attempts"] = row["file_specification_failed_attempts"] = row["director_unknown_failed_attempts"] = row["director_other_failed_attempts"] = 0
+
             row["total_final_attempts"] = row["final_failed_attempts"] + row["success_attempts"]
             row["pct_failed_attempts"] = row["all_failed_attempts"] / max(row["total_attempts"], row["all_failed_attempts"], 1)
             row["pct_failed_attempts_not404"] = row["notfilenotfound_failed_attempts"] / max(row["total_attempts"], row["notfilenotfound_failed_attempts"], 1)
@@ -672,6 +674,10 @@ if __name__ == "__main__":
             row["pct_jobs_affected_404"] = row["final_filenotfound_failed_attempts"] / max(row["total_final_attempts"], row["final_filenotfound_failed_attempts"], 1)
             row["pct_uniq_jobs_affected"] = row["all_failed_attempts_jobs"] / max(row["total_attempts_jobs"], row["all_failed_attempts_jobs"], 1)
             row["pct_failed_director_attempts"] = row["director_failed_attempts"] / max(row["director_attempts"], row["director_failed_attempts"], 1)
+            row["pct_failed_director_contact_attempts"] = row["director_contact_failed_attempts"] / max(row["director_failed_attempts"], 1)
+            row["pct_failed_director_other_attempts"] = row["director_other_failed_attempts"] / max(row["director_failed_attempts"], 1)
+            row["pct_failed_director_unknown_attempts"] = row["director_unknown_failed_attempts"] / max(row["director_failed_attempts"], 1)
+            row["pct_failed_file_spec_attempts"] = row["file_specification_failed_attempts"] / max(row["director_failed_attempts"], 1)
             row["failed_director_attempts_per_job"] = row["director_failed_attempts"] / max(row["director_attempts_jobs"], row["director_failed_attempts"], 1)
             row["pct_jobs_affected_director"] = row["director_failed_attempts_jobs"] / max(row["director_attempts_jobs"], row["director_failed_attempts_jobs"], 1)
             resource_name_data[transfer_type].append(row)
@@ -700,6 +706,14 @@ if __name__ == "__main__":
             except KeyError:
                 resource_name_data_totals[transfer_type][attempt_type] = 0
                 resource_name_data_totals[transfer_type][f"{attempt_type}_jobs"] = 0
+
+        resource_name_data_totals[transfer_type]["director_contact_failed_attempts"] = sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["error_type"], r"Contact")
+        resource_name_data_totals[transfer_type]["file_specification_failed_attempts"] = sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["error_type"], r"(Specification|Parameter)\.FileNotFound")
+        resource_name_data_totals[transfer_type]["director_unknown_failed_attempts"] = sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["error_type"], r"(Unknown|Unprocessed)")
+        resource_name_data_totals[transfer_type]["director_other_failed_attempts"] = \
+            sum_buckets_matching(director_failed_transfer_type_data[transfer_type]["error_type"], r".*") - \
+            (resource_name_data_totals[transfer_type]["director_contact_failed_attempts"] + resource_name_data_totals[transfer_type]["file_specification_failed_attempts"] + resource_name_data_totals[transfer_type]["director_unknown_failed_attempts"])
+
         resource_name_data_totals[transfer_type]["total_final_attempts"] = resource_name_data_totals[transfer_type]["final_failed_attempts"] + resource_name_data_totals[transfer_type]["success_attempts"]
         resource_name_data_totals[transfer_type]["pct_failed_attempts"] = resource_name_data_totals[transfer_type]["all_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts"], resource_name_data_totals[transfer_type]["all_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["pct_failed_attempts_not404"] = resource_name_data_totals[transfer_type]["notfilenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_attempts"], resource_name_data_totals[transfer_type]["notfilenotfound_failed_attempts"], 1)
@@ -708,6 +722,10 @@ if __name__ == "__main__":
         resource_name_data_totals[transfer_type]["pct_jobs_affected_404"] = resource_name_data_totals[transfer_type]["final_filenotfound_failed_attempts"] / max(resource_name_data_totals[transfer_type]["total_final_attempts"], resource_name_data_totals[transfer_type]["final_filenotfound_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["pct_uniq_jobs_affected"] = resource_name_data_totals[transfer_type]["all_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["total_attempts_jobs"], resource_name_data_totals[transfer_type]["all_failed_attempts_jobs"], 1)
         resource_name_data_totals[transfer_type]["pct_failed_director_attempts"] = resource_name_data_totals[transfer_type]["director_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_attempts"], resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_failed_director_contact_attempts"] = resource_name_data_totals[transfer_type]["director_contact_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_failed_director_other_attempts"] = resource_name_data_totals[transfer_type]["director_other_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_failed_director_unknown_attempts"] = resource_name_data_totals[transfer_type]["director_unknown_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
+        resource_name_data_totals[transfer_type]["pct_failed_file_spec_attempts"] = resource_name_data_totals[transfer_type]["file_specification_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["failed_director_attempts_per_job"] = resource_name_data_totals[transfer_type]["director_failed_attempts"] / max(resource_name_data_totals[transfer_type]["director_attempts_jobs"], resource_name_data_totals[transfer_type]["director_failed_attempts"], 1)
         resource_name_data_totals[transfer_type]["pct_jobs_affected_director"] = resource_name_data_totals[transfer_type]["director_failed_attempts_jobs"] / max(resource_name_data_totals[transfer_type]["director_attempts_jobs"], resource_name_data_totals[transfer_type]["director_failed_attempts_jobs"], 1)
         resource_name_data[transfer_type].sort(key=itemgetter("total_attempts"), reverse=True)
@@ -938,15 +956,19 @@ if __name__ == "__main__":
 
     ### DIRECTOR RESOURCE DOWNLOAD TABLE
 
-    html.append("<h2><strong>OSDF director</strong> per OSPool resource download (i.e. input transfer) statistics</h2>")
+    html.append("<h2><strong>Pelican plugin/OSDF director</strong> per OSPool resource download (i.e. input transfer) statistics</h2>")
 
     columns = [
         ("Resource Name", "resource_name", "s"),
         ("Resource Institution", "resource_institution", "s"),
-        ("Contact Attempts", "director_attempts", ",d"),
+        ("Plugin Attempts", "director_attempts", ",d"),
         ("Total Uniq Jobs", "director_attempts_jobs", ",d"),
-        ("Failed Contact Attempts", "director_failed_attempts", ",d"),
-        ("Pct Contact Attempts Failed", "pct_failed_director_attempts", ".1%"),
+        ("Failed Plugin Attempts", "director_failed_attempts", ",d"),
+        ("Pct Plugin Attempts Failed", "pct_failed_director_attempts", ".1%"),
+        ("Pct Failures Director Contact", "pct_failed_director_contact_attempts", ".1%"),
+        ("Pct Failures File Spec", "pct_failed_file_spec_attempts", ".1%"),
+        ("Pct Failures Unknown Reason", "pct_failed_director_unknown_attempts", ".1%"),
+        ("Pct Failures Other", "pct_failed_director_other_attempts", ".1%"),
         ("Uniq Jobs Interrupted", "director_failed_attempts_jobs", ",d"),
         ("Pct Uniq Jobs Interrupted", "pct_jobs_affected_director", ".1%"),
     ]
@@ -980,17 +1002,21 @@ if __name__ == "__main__":
 
     ### DIRECTOR RESOURCE UPLOAD TABLE
 
-    html.append("<h2><strong>OSDF director</strong> per OSPool resource upload (i.e. output transfer) statistics</h2>")
+    html.append("<h2><strong>Pelican plugin/OSDF director</strong> per OSPool resource upload (i.e. output transfer) statistics</h2>")
 
-    html.append('<p>Note: Some of these errors could be from the user specifying a missing output file.')
+    html.append('<p>Note: Unknown errors could be director contact error or user specifying a missing output file.')
 
     columns = [
         ("Resource Name", "resource_name", "s"),
         ("Resource Institution", "resource_institution", "s"),
-        ("Contact Attempts", "director_attempts", ",d"),
+        ("Plugin Attempts", "director_attempts", ",d"),
         ("Total Uniq Jobs", "director_attempts_jobs", ",d"),
-        ("Failed Contact Attempts", "director_failed_attempts", ",d"),
-        ("Pct Contact Attempts Failed", "pct_failed_director_attempts", ".1%"),
+        ("Failed Plugin Attempts", "director_failed_attempts", ",d"),
+        ("Pct Plugin Attempts Failed", "pct_failed_director_attempts", ".1%"),
+        ("Pct Failures Director Contact", "pct_failed_director_contact_attempts", ".1%"),
+        ("Pct Failures File Spec", "pct_failed_file_spec_attempts", ".1%"),
+        ("Pct Failures Unknown Reason", "pct_failed_director_unknown_attempts", ".1%"),
+        ("Pct Failures Other", "pct_failed_director_other_attempts", ".1%"),
         ("Uniq Jobs Interrupted", "director_failed_attempts_jobs", ",d"),
         ("Pct Uniq Jobs Interrupted", "pct_jobs_affected_director", ".1%"),
     ]
@@ -1045,7 +1071,15 @@ if __name__ == "__main__":
         "404 Pct Attempts Failed": "404 Failed Attempts / Total Attempts (as a percentage)",
         "404 Jobs Interrupted": "Number of final transfer attempts that failed due to FileNotFound",
         "404 Pct Jobs Interrupted": "404 Jobs Interrupted / Total Jobs Interrupted (as a percentage)",
+        "Plugin Attempts": "Number of times the plugin began the process of transferring a file",
+        "Failed Plugin Attempts": "Number of times the plugin failed to progress past contacting the director",
+        "Pct Plugin Attempts Failed": "Failed Plugin Attempts / Plugin Attempts (as a percentage)",
+        "Pct Failures Director Contact": "Percentage of Failed Plugin Attempts where the plugin recorded a failure to contact the director",
+        "Pct Failures File Spec": "Percentage of Failed Plugin Attempts where the plugin recorded that it could not find the file to be transferred",
+        "Pct Failures Unknown Reason": "Percentage of Failed Plugin Attempts where the type of failure was not categorized",
+        "Pct Failures Other": "Percentage of Failed Plugin Attempts where the type of failure was categorized but did not fall in the above categories",
     }
+
     html.append("<ul>")
     for term, definition in legend.items():
         html.append(f"\t<li><strong>{term}</strong>: {definition}</li>")
