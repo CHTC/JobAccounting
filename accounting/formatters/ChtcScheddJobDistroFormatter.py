@@ -1,8 +1,6 @@
 import csv
-from collections import OrderedDict, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from decimal import Decimal
 
 
 def break_chars(s):

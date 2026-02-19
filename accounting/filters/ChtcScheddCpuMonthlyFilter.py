@@ -1,9 +1,6 @@
-
-import statistics as stats
 from collections import defaultdict
 from operator import itemgetter
 from ast import literal_eval
-import elasticsearch.helpers
 from .BaseFilter import BaseFilter
 from accounting.functions import get_job_units
 

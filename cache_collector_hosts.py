@@ -1,7 +1,18 @@
 import re
-import htcondor
+import sys
 import pickle
 from pathlib import Path
+
+try:
+    import htcondor2 as htcondor
+except ImportError:
+    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+    try:
+        import htcondor
+    except ImportError:
+        print("Could not import htcondor", file=sys.stderr)
+        raise
+
 
 CUSTOM_MAPPING = {
     "osg-login2.pace.gatech.edu": {"osg-login2.pace.gatech.edu"},
