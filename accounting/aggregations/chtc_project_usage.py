@@ -41,12 +41,14 @@ ELASTICSEARCH_ARGS = {
     "--es-timeout": {"type": int},
 }
 
-TD_STYLE = "border: 1px solid black; text-align: right"
+NUMERIC_TD_STYLE = "border: 1px solid black; text-align: right"
+TEXT_TD_STYLE = "border: 1px solid black; text-align: left"
 
 DEFAULT_COLUMNS = {
+     5: "User",
     10: "Num Uniq Job Ids",
     20: "All CPU Hours",
-    30: "% Good CPU Hours",
+    30: r"% Good CPU Hours",
     35: "Job Unit Hours",
 
     45: "% Ckpt Able",
@@ -78,11 +80,7 @@ DEFAULT_COLUMNS = {
     170: "Std Hrs",
 
     180: "Input Files / Exec Att",
-#    181: "Input MB / Exec Att",
-#    182: "Input MB / File",
     190: "Output Files / Job",
-#    191: "Output MB / Job",
-#    192: "Output MB / File",
 
     300: "Good CPU Hours",
     305: "CPU Hours / Bad Exec Att",
@@ -118,6 +116,24 @@ DEFAULT_COLUMNS = {
 # }
 # emit(project);
 # """
+
+RESOURCE_TYPES = ["Cpus", "Memory", "Disk", "Gpus"]
+FLOORED_RESOURCE_FIELD = "FlooredRequest{resource}"
+FLOORED_RESOURCE_SCRIPT = """
+if (
+    doc.containsKey("{resource}Provisioned") &&
+    doc["{resource}Provisioned"].size() > 0 &&
+    doc.containsKey("Request{resource}") &&
+    doc["Request{resource}"].size() > 0 &&
+    doc["{resource}Provisioned"].value < doc["Request{resource}"].value
+    ) {{
+        emit(doc["{resource}Provisioned"].value);
+}} else if (
+    doc.containsKey("Request{resource}") &&
+    doc["Request{resource}"].size() > 0) {{
+        emit(doc["Request{resource}"].value);
+}}
+"""
 
 HAS_SCRIPT_SRC = """
     if (doc.containsKey("{key}") && doc["{key}.keyword"].size() > 0) {{
@@ -173,13 +189,25 @@ JOB_UNITS_SCRIPT_SRC = r"""
     long disk_units = 1;
     long job_units = 1;
     if (doc.containsKey("RequestCpus") && doc["RequestCpus"].size() > 0) {
-        cpu_units = (long)(doc["RequestCpus"].value / cpu_unit);
+        if (doc.containsKey("CpusProvisioned") && doc["CpusProvisioned"].size() > 0 && doc["CpusProvisioned"].value < doc["RequestCpus"].value) {
+            cpu_units = (long)(doc["CpusProvisioned"].value / cpu_unit);
+        } else {
+            cpu_units = (long)(doc["RequestCpus"].value / cpu_unit);
+        }
     }
     if (doc.containsKey("RequestMemory") && doc["RequestMemory"].size() > 0) {
-        memory_units = (long)(((double)doc["RequestMemory"].value / (double)1024) / memory_gb_unit);
+        if (doc.containsKey("MemoryProvisioned") && doc["MemoryProvisioned"].size() > 0 && doc["MemoryProvisioned"].value < doc["RequestMemory"].value) {
+            memory_units = (long)(((double)doc["MemoryProvisioned"].value / (double)1024) / memory_gb_unit);
+        } else {
+            memory_units = (long)(((double)doc["RequestMemory"].value / (double)1024) / memory_gb_unit);
+        }
     }
     if (doc.containsKey("RequestDisk") && doc["RequestDisk"].size() > 0) {
-        disk_units = (long)(((double)doc["RequestDisk"].value / Math.pow((double)1024, 2)) / disk_gb_unit);
+        if (doc.containsKey("DiskProvisioned") && doc["DiskProvisioned"].size() > 0 && doc["DiskProvisioned"].value < doc["RequestDisk"].value) {
+            disk_units = (long)(((double)doc["DiskProvisioned"].value / Math.pow((double)1024, 2)) / disk_gb_unit);
+        } else {
+            disk_units = (long)(((double)doc["RequestDisk"].value / Math.pow((double)1024, 2)) / disk_gb_unit);
+        }
     }
     job_units = (long)Math.max((long)Math.max(cpu_units, memory_units), disk_units);
     emit(job_units);
@@ -239,8 +267,12 @@ emit(gb);
 
 OVER_REQUEST_DISK_SRC = r"""
 boolean over = false;
+long request_disk = doc["RequestDisk"].value;
+if (doc.containsKey("DiskProvisioned") && doc["DiskProvisioned"].size() > 0 && doc["DiskProvisioned"].value < doc["RequestDisk"].value) {
+    request_disk = doc["DiskProvisioned"].value;
+}
 if (doc.containsKey("DiskUsage") && doc["DiskUsage"].size() > 0) {
-    over = doc["DiskUsage"].value > doc["RequestDisk"].value;
+    over = doc["DiskUsage"].value > request_disk;
 }
 emit(over)
 """
@@ -484,6 +516,13 @@ def get_query(
             },
         }
     }
+    for resource in RESOURCE_TYPES:
+        runtime_mappings["runtime_mappings"][FLOORED_RESOURCE_FIELD.format(resource=resource)] = {
+            "type": "long",
+            "script": {
+                "source": FLOORED_RESOURCE_SCRIPT.format(resource=resource)
+            }
+        }
     for new_key, old_key in HAS_FIELDS.items():
         runtime_mappings["runtime_mappings"][new_key] = {
             "type": "boolean",
@@ -493,23 +532,30 @@ def get_query(
         }
     query.update_from_dict(runtime_mappings)
 
+    users_agg = A(
+        "terms",
+        field="User.keyword"
+    )
+
+    metric_aggs = {}
+
     cpu_hours_agg = A(
         "sum",
         script={
             "lang": "painless",
-            "inline": "doc['RequestCpus'].value * (doc['RemoteWallClockTime'].value / 3600.0)"
+            "inline": "doc['FlooredRequestCpus'].value * (doc['RemoteWallClockTime'].value / 3600.0)"
         }
     )
-    query.aggs.metric("cpu_hours", cpu_hours_agg)
+    metric_aggs["cpu_hours"] = cpu_hours_agg
 
     good_cpu_hours_agg = A(
         "sum",
         script={
             "lang": "painless",
-            "inline": "doc['RequestCpus'].value * (doc['CommittedTime'].value / 3600.0)"
+            "inline": "doc['FlooredRequestCpus'].value * (doc['CommittedTime'].value / 3600.0)"
         }
     )
-    query.aggs.metric("good_cpu_hours", good_cpu_hours_agg)
+    metric_aggs["good_cpu_hours"] = good_cpu_hours_agg
 
     job_unit_hours_agg = A(
         "sum",
@@ -518,184 +564,190 @@ def get_query(
             "inline": "doc['JobUnits'].value * (doc['RemoteWallClockTime'].value / 3600.0)"
         }
     )
-    query.aggs.metric("job_unit_hours", job_unit_hours_agg)
+    metric_aggs["job_unit_hours"] = job_unit_hours_agg
 
     ckptable_jobs_agg = A(
         "filter",
         Q("term", IsCheckpointable=True)
     )
-    query.aggs.metric("ckptable_jobs", ckptable_jobs_agg)
+    metric_aggs["ckptable_jobs"] = ckptable_jobs_agg
 
     rm_jobs_agg = A(
         "filter",
         Q("term", JobStatus=3)
     )
-    query.aggs.metric("rm_jobs", rm_jobs_agg)
+    metric_aggs["rm_jobs"] = rm_jobs_agg
 
     files_transferred_agg = A(
         "sum",
         field="FilesTransferred"
     )
-    query.aggs.metric("files_transferred", files_transferred_agg)
+    metric_aggs["files_transferred"] = files_transferred_agg
 
     gb_transferred_agg = A(
         "sum",
         field="GbTransferred"
     )
-    query.aggs.metric("gb_transferred", gb_transferred_agg)
+    metric_aggs["gb_transferred"] = gb_transferred_agg
 
     osdf_files_transferred_agg = A(
         "sum",
         field="OsdfFilesTransferred"
     )
-    query.aggs.metric("osdf_files_transferred", osdf_files_transferred_agg)
+    metric_aggs["osdf_files_transferred"] = osdf_files_transferred_agg
 
     osdf_gb_transferred_agg = A(
         "sum",
         field="OsdfGbTransferred"
     )
-    query.aggs.metric("osdf_gb_transferred", osdf_gb_transferred_agg)
+    metric_aggs["osdf_gb_transferred"] = osdf_gb_transferred_agg
 
     shadow_starts_agg = A(
         "sum",
         field="NumShadowStarts",
     )
-    query.aggs.metric("shadow_starts", shadow_starts_agg)
+    metric_aggs["shadow_starts"] = shadow_starts_agg
 
     job_starts_agg = A(
         "sum",
         field="NumJobStarts",
     )
-    query.aggs.metric("job_starts", job_starts_agg)
+    metric_aggs["job_starts"] = job_starts_agg
 
     holds_agg = A(
         "sum",
         field="NumHolds",
     )
-    query.aggs.metric("holds", holds_agg)
+    metric_aggs["holds"] = holds_agg
 
     short_jobs_agg = A(
         "filter",
         Q("range", LastExecWallClockTime={"lt": 60}),
     )
-    query.aggs.metric("short_jobs", short_jobs_agg)
+    metric_aggs["short_jobs"] = short_jobs_agg
 
     multi_start_jobs_agg = A(
         "filter",
         Q("range", NumJobStarts={"gt": 1}),
     )
-    query.aggs.metric("multi_start_jobs", multi_start_jobs_agg)
+    metric_aggs["multi_start_jobs"] = multi_start_jobs_agg
 
     held_jobs_agg = A(
         "filter",
         Q("range", NumHolds={"gte": 1}),
     )
-    query.aggs.metric("held_jobs", held_jobs_agg)
+    metric_aggs["held_jobs"] = held_jobs_agg
 
     jobs_over_request_disk_agg = A(
         "filter",
         Q("term", OverRequestDisk=True),
     )
-    query.aggs.metric("jobs_over_request_disk", jobs_over_request_disk_agg)
+    metric_aggs["jobs_over_request_disk"] = jobs_over_request_disk_agg
 
     jobs_using_singularity_agg = A(
         "filter",
         Q("term", HasSingularityImage=True),
     )
-    query.aggs.metric("jobs_using_singularity", jobs_using_singularity_agg)
+    metric_aggs["jobs_using_singularity"] = jobs_using_singularity_agg
 
     mean_activation_hours_agg = A(
         "avg",
         field="ActivationHours",
     )
-    query.aggs.metric("activation_hours", mean_activation_hours_agg)
+    metric_aggs["activation_hours"] = mean_activation_hours_agg
 
     mean_activation_setup_seconds_agg = A(
         "avg",
         field="ActivationSetupSeconds",
     )
-    query.aggs.metric("activation_setup_seconds", mean_activation_setup_seconds_agg)
+    metric_aggs["activation_setup_seconds"] = mean_activation_setup_seconds_agg
 
     non_short_jobs_stats_agg = A(
         "extended_stats",
         field="NonShortJobHours",
     )
-    query.aggs.metric("non_short_jobs_stats", non_short_jobs_stats_agg)
+    metric_aggs["non_short_jobs_stats"] = non_short_jobs_stats_agg
 
     non_short_jobs_pcts_agg = A(
         "percentiles",
         field="NonShortJobHours",
         percents=[25, 50, 75, 95],
     )
-    query.aggs.metric("non_short_jobs_pcts", non_short_jobs_pcts_agg)
+    metric_aggs["non_short_jobs_pcts"] = non_short_jobs_pcts_agg
 
     input_files_transferred_agg = A(
         "sum",
         field="InputFilesTransferred",
     )
-    query.aggs.metric("input_files_transferred", input_files_transferred_agg)
+    metric_aggs["input_files_transferred"] = input_files_transferred_agg
 
     output_files_transferred_agg = A(
         "sum",
         field="OutputFilesTransferred",
     )
-    query.aggs.metric("output_files_transferred", output_files_transferred_agg)
+    metric_aggs["output_files_transferred"] = output_files_transferred_agg
 
     dag_node_jobs_agg = A(
         "filter",
         Q("term", HasDAGNodeName=True),
     )
-    query.aggs.metric("dag_node_jobs", dag_node_jobs_agg)
+    metric_aggs["dag_node_jobs"] = dag_node_jobs_agg
 
     max_request_memory_agg = A(
         "max",
-        field="RequestMemory",
+        field="FlooredRequestMemory",
     )
-    query.aggs.metric("max_request_memory", max_request_memory_agg)
+    metric_aggs["max_request_memory"] = max_request_memory_agg
 
     med_used_memory_agg = A(
         "percentiles",
         field="MemoryUsage",
         percents=[50]
     )
-    query.aggs.metric("med_used_memory", med_used_memory_agg)
+    metric_aggs["med_used_memory"] = med_used_memory_agg
 
     max_used_memory_agg = A(
         "max",
         field="MemoryUsage",
     )
-    query.aggs.metric("max_used_memory", max_used_memory_agg)
+    metric_aggs["max_used_memory"] = max_used_memory_agg
 
     max_request_disk_agg = A(
         "max",
-        field="RequestDisk",
+        field="FlooredRequestDisk",
     )
-    query.aggs.metric("max_request_disk", max_request_disk_agg)
+    metric_aggs["max_request_disk"] = max_request_disk_agg
 
     max_used_disk_agg = A(
         "max",
         field="DiskUsage",
     )
-    query.aggs.metric("max_used_disk", max_used_disk_agg)
+    metric_aggs["max_used_disk"] = max_used_disk_agg
 
     max_request_cpus_agg = A(
         "max",
-        field="RequestCpus",
+        field="FlooredRequestCpus",
     )
-    query.aggs.metric("max_request_cpus", max_request_cpus_agg)
+    metric_aggs["max_request_cpus"] = max_request_cpus_agg
 
     med_job_units_agg = A(
         "percentiles",
         field="JobUnits",
         percents=[50],
     )
-    query.aggs.metric("med_job_units", med_job_units_agg)
+    metric_aggs["med_job_units"] = med_job_units_agg
 
     max_job_units_agg = A(
         "max",
         field="JobUnits"
     )
-    query.aggs.metric("max_job_units", max_job_units_agg)
+    metric_aggs["max_job_units"] = max_job_units_agg
+
+    for agg_name, agg in metric_aggs.items():
+        users_agg.metric(agg_name, agg)
+        query.aggs.metric(agg_name, agg)
+
+    query.aggs.bucket("users", users_agg)
 
     return query
 
@@ -719,12 +771,19 @@ def print_error(d, depth=0):
             print(f"{pre}{k}:\t{v}")
 
 
-def summarize_results(res) -> dict:
+def summarize_results(res, user: str) -> dict:
     o = {}
-    jobs = res.hits.total.value
+    if user == "TOTAL":
+        jobs = res.hits.total.value
+    else:
+        jobs = res.doc_count
     if jobs == 0:
         return o
-    a = res.aggregations
+    if user == "TOTAL":
+        a = res.aggregations
+    else:
+        a = res
+    o["User"] = user
     o["Num Uniq Job Ids"] = jobs
     o["All CPU Hours"] = a.cpu_hours.value
     o[r"% Good CPU Hours"] = 100 * (a.good_cpu_hours.value / a.cpu_hours.value) if a.cpu_hours.value > 0 else 0
@@ -779,69 +838,74 @@ def summarize_results(res) -> dict:
     return o
 
 
-def get_html(summary: dict) -> str:
+def get_html(summary: dict, sort_col="Num Uniq Job Ids") -> str:
 
-    def hhmm(hours):
+    def break_user(user: str):
+        zws = "&ZeroWidthSpace;"
+        return user.replace("@", f"{zws}@")
+
+    def hhmm(hours: float):
         # Convert float hours to HH:MM
         h = int(hours)
         m = int(60 * (float(hours) - int(hours)))
         return f"{h:02d}:{m:02d}"
 
-    def handle_dashes(dtype, fmt, value):
+    def handle_dashes(dtype: type, fmt: str, value):
         # Cast value to dtype and format it.
         # Right-align any non-castable values and return them as is.
-        formatted_str = f"""<td style="{TD_STYLE};"></td>"""
+        formatted_str = f"""<td style="{NUMERIC_TD_STYLE};"></td>"""
         try:
             value = dtype(value)
-            formatted_str = f"""<td style="{TD_STYLE}">{value:{fmt}}</td>"""
+            formatted_str = f"""<td style="{NUMERIC_TD_STYLE}">{value:{fmt}}</td>"""
         except ValueError:
-            formatted_str = f"""<td style="{TD_STYLE}; text-align: right">{value}</td>"""
+            formatted_str = f"""<td style="{NUMERIC_TD_STYLE}; text-align: right">{value}</td>"""
         except Exception as err:
             print(f"Caught unexpected exception {str(err)} when converting {value} to {repr(dtype)}.", file=sys.stderr)
-            formatted_str = f"""<td style="{TD_STYLE}; text-align: right">{value}</td>"""
+            formatted_str = f"""<td style="{NUMERIC_TD_STYLE}; text-align: right">{value}</td>"""
         return formatted_str
 
-    def get_fmt(col):
+    def get_fmt(col: str):
         custom_fmts = {
-            "Min Hrs":    lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "25% Hrs":    lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "Med Hrs":    lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "75% Hrs":    lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "95% Hrs":    lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "Max Hrs":    lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "Mean Hrs":   lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "Std Hrs":    lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "Mean Actv Hrs": lambda x: f"""<td style="{TD_STYLE};">{hhmm(x)}</td>""",
-            "CPU Hours / Bad Exec Att": lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Shadw Starts / Job Id":    lambda x: f"""<td style="{TD_STYLE};">{float(x):.2f}</td>""",
-            "Exec Atts / Shadw Start":  lambda x: f"""<td style="{TD_STYLE};">{float(x):.3f}</td>""",
-            "Holds / Job Id":           lambda x: f"""<td style="{TD_STYLE};">{float(x):.2f}</td>""",
+            "User":       lambda x: f"""<td style="{TEXT_TD_STYLE};">{break_user(x)}</td>""",
+            "Min Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "25% Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "Med Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "75% Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "95% Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "Max Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "Mean Hrs":   lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "Std Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "Mean Actv Hrs": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
+            "CPU Hours / Bad Exec Att": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
+            "Shadw Starts / Job Id":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.2f}</td>""",
+            "Exec Atts / Shadw Start":  lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.3f}</td>""",
+            "Holds / Job Id":           lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.2f}</td>""",
             "OSDF Files Xferd":     lambda x: handle_dashes(  int,   ",", x),
             "% OSDF Files":         lambda x: handle_dashes(float, ".1f", x),
             "% OSDF Bytes":         lambda x: handle_dashes(float, ".1f", x),
-            "% Rm'd Jobs":          lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "% Short Jobs":         lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "% Jobs w/>1 Exec Att": lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "% Jobs w/1+ Holds":    lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "% Jobs Over Rqst Disk": lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "% Ckpt Able":          lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "% Jobs using S'ty":    lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Input Files / Exec Att": lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Input MB / Exec Att":    lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Input MB / File":        lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Output Files / Job":     lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Output MB / Job":        lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Output MB / File":       lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Max Rqst Disk GB":       lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
-            "Max Used Disk GB":       lambda x: f"""<td style="{TD_STYLE};">{float(x):.1f}</td>""",
+            "% Rm'd Jobs":          lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "% Short Jobs":         lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "% Jobs w/>1 Exec Att": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "% Jobs w/1+ Holds":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "% Jobs Over Rqst Disk": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "% Ckpt Able":          lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "% Jobs using S'ty":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "Input Files / Exec Att": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
+            "Input MB / Exec Att":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "Input MB / File":        lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
+            "Output Files / Job":     lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
+            "Output MB / Job":        lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
+            "Output MB / File":       lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
+            "Max Rqst Disk GB":       lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
+            "Max Used Disk GB":       lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
         }
-        return custom_fmts.get(col, lambda x: f"""<td style="{TD_STYLE};">{int(x):,d}</td>""")
+        return custom_fmts.get(col, lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{int(x):,d}</td>""")
 
     def get_legend():
         custom_items = {}
         custom_items["Num Uniq Job Ids"] = "Number of unique job ids across all execution attempts"
         custom_items["All CPU Hours"]    = "Total CPU hours for all execution attempts, including preemption and removal"
-        custom_items["% Good CPU Hours"] = "Good CPU Hours per All CPU Hours, as a percentage"
+        custom_items[r"% Good CPU Hours"] = "Good CPU Hours per All CPU Hours, as a percentage"
         custom_items["Good CPU Hours"]   = "Total CPU hours for execution attempts that ran to completion"
         custom_items["Job Units"]        = "The minimum number of base job units required to satisfy a job's resource requirements. The base job unit is 1 CPU, 4 GB memory, and 4 GB disk"
         custom_items["Job Unit Hours"]   = """Job units multiplied by total wallclock hours, like "All CPU Hours" but using "Job Units" instead of CPUs"""
@@ -905,14 +969,22 @@ def get_html(summary: dict) -> str:
 """
     )
     for _, col in sorted(DEFAULT_COLUMNS.items()):
-        if col in summary:
+        if col in summary["TOTAL"]:
             html.append(f"""\t<th style="border: 1px solid black;">{col}</th>\n""")
     html.append("</tr>\n<tr>\n")
     for _, col in sorted(DEFAULT_COLUMNS.items()):
-        if col in summary:
+        if col in summary["TOTAL"]:
             fmt = get_fmt(col)
-            html.append(f"""\t{fmt(summary[col])}\n""")
-    html.append("</tr>\n</table>\n")
+            html.append(f"""\t{fmt(summary["TOTAL"][col])}\n""")
+    html.append("</tr>\n")
+    for _, user in sorted([(s[sort_col], s["User"]) for s in summary.values() if s["User"] != "TOTAL"], reverse=True):
+        html.append("<tr>\n")
+        for _, col in sorted(DEFAULT_COLUMNS.items()):
+            if col in summary[user]:
+                fmt = get_fmt(col)
+                html.append(f"""\t{fmt(summary[user][col])}\n""")
+        html.append("</tr>\n")
+    html.append("</table>\n")
     html.append("<p>Legend:\n<ul>\n")
     for col, desc in get_legend().items():
         html.append(f"\t<li><strong>{col}</strong>: {desc}</li>\n")
@@ -965,7 +1037,10 @@ def main():
         raise err
 
     print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
-    summary = summarize_results(result)
+    summary = {}
+    summary["TOTAL"] = summarize_results(result, "TOTAL")
+    for bucket in result.aggregations.users.buckets:
+        summary[bucket["key"]] = summarize_results(bucket, bucket["key"])
     print(json.dumps(summary, indent=2))
     if summary:
         html = get_html(summary)
@@ -973,20 +1048,20 @@ def main():
         html = f"<html><body>No usage found during the reporting period</body></html>"
     print(html)
 
-    subject = f"{days}-day CHTC Usage Report for {args.project} starting {args.start.strftime(r'%Y-%m-%d')}"
-    send_email(
-        subject=subject,
-        from_addr=args.from_addr,
-        to_addrs=args.to,
-        html=html,
-        cc_addrs=args.cc,
-        bcc_addrs=args.cc,
-        reply_to_addr=args.reply_to,
-        smtp_server=args.smtp_server,
-        smtp_username=args.smtp_username,
-        smtp_password_file=args.smtp_password_file,
-    )
-
+    if args.to:  # only send email if at least one To: address is specified
+        subject = f"{days}-day CHTC Usage Report for {args.project} starting {args.start.strftime(r'%Y-%m-%d')}"
+        send_email(
+            subject=subject,
+            from_addr=args.from_addr,
+            to_addrs=args.to,
+            html=html,
+            cc_addrs=args.cc,
+            bcc_addrs=args.cc,
+            reply_to_addr=args.reply_to,
+            smtp_server=args.smtp_server,
+            smtp_username=args.smtp_username,
+            smtp_password_file=args.smtp_password_file,
+        )
 
 
 if __name__ == "__main__":
