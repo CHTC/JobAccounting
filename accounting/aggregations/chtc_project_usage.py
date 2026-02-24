@@ -1039,10 +1039,10 @@ def main():
     print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
     summary = {}
     summary["TOTAL"] = summarize_results(result, "TOTAL")
-    for bucket in result.aggregations.users.buckets:
-        summary[bucket["key"]] = summarize_results(bucket, bucket["key"])
-    print(json.dumps(summary, indent=2))
-    if summary:
+    if summary["TOTAL"]:
+        for bucket in result.aggregations.users.buckets:
+            summary[bucket["key"]] = summarize_results(bucket, bucket["key"])
+        print(json.dumps(summary, indent=2))
         html = get_html(summary)
     else:
         html = f"<html><body>No usage found during the reporting period</body></html>"
