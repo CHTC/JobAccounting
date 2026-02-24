@@ -170,6 +170,9 @@ class OsgScheddLongJobFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Get output dict for this user
         user = i.get("User", "UNKNOWN") or "UNKNOWN"
         o = data["Users"][user]
@@ -198,7 +201,9 @@ class OsgScheddLongJobFilter(BaseFilter):
                             "LastRemoteHost"}:
                 o[attr][0] = i.get(attr, i.get(attr.lower(), "UNKNOWN")) or "UNKNOWN"
             elif attr in {"RequestGpus"}:
-                o[attr][0] = i.get(attr, 0)
+                o[attr][0] = f.get("FlooredRequestGpus", i.get("RequestGpus", 0))
+            elif attr.startswith("Request"):
+                o[attr][0] = f.get(f"Floored{attr}", i.get(attr, None))
             else:
                 o[attr][0] = i.get(attr, None)
 

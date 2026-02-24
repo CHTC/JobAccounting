@@ -302,7 +302,7 @@ class OsgScheddCpuFilter(BaseFilter):
         i = doc["_source"]
 
         # Get computed fields (as single values instead of arrays)
-        f = {k: v[0] for k, v in doc["fields"].items()}
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this schedd
         schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
@@ -368,7 +368,7 @@ class OsgScheddCpuFilter(BaseFilter):
         i = doc["_source"]
 
         # Get computed fields (as single values instead of arrays)
-        f = {k: v[0] for k, v in doc["fields"].items()}
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this user
         user = i.get("User", "UNKNOWN") or "UNKNOWN"
@@ -438,7 +438,7 @@ class OsgScheddCpuFilter(BaseFilter):
         i = doc["_source"]
 
         # Get computed fields (as single values instead of arrays)
-        f = {k: v[0] for k, v in doc["fields"].items()}
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this project
         project = i.get("ProjectName", i.get("projectname", "UNKNOWN")) or "UNKNOWN"
@@ -518,7 +518,7 @@ class OsgScheddCpuFilter(BaseFilter):
         i = doc["_source"]
 
         # Get computed fields (as single values instead of arrays)
-        f = {k: v[0] for k, v in doc["fields"].items()}
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Filter out jobs that did not run in the OS pool
         if not self.is_ospool_job(i):

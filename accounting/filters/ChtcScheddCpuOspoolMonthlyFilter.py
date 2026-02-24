@@ -178,7 +178,7 @@ class ChtcScheddCpuOspoolMonthlyFilter(BaseFilter):
         is_exec = i.get("NumJobStarts", 0) >= 1
         is_multiexec = i.get("NumJobStarts", 0) > 1
         has_holds = i.get("NumHolds", 0) > 0
-        is_over_rqst_disk = i.get("DiskUsage", 0) > i.get("RequestDisk", 1000)
+        is_over_rqst_disk = i.get("DiskUsage", 0) > f.get("FlooredRequestDisk", 1000)
         is_singularity_job = i.get("SingularityImage") is not None
         has_activation_duration = i.get("activationduration") is not None
         if has_activation_duration:
@@ -211,9 +211,9 @@ class ChtcScheddCpuOspoolMonthlyFilter(BaseFilter):
         elif not is_removed:
             goodput_time = int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 0))))
         job_units = get_job_units(
-            cpus=i.get("RequestCpus", 1),
-            memory_gb=i.get("RequestMemory", 1024)/1024,
-            disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
+            cpus=f.get("FlooredRequestCpus", 1),
+            memory_gb=f.get("FlooredRequestMemory", 1024)/1024,
+            disk_gb=f.get("FlooredRequestDisk", 1024**2)/1024**2,
         )
         input_files = 0
         input_bytes = 0
@@ -289,9 +289,9 @@ class ChtcScheddCpuOspoolMonthlyFilter(BaseFilter):
         sum_cols["TotalActivationSetupDuration"] = int(activation_setup_duration)
 
         sum_cols["TotalLongJobWallClockTime"] = long_job_wallclock_time
-        sum_cols["GoodCpuTime"] = (goodput_time * max(i.get("RequestCpus", 1), 1))
-        sum_cols["CpuTime"] = (i.get("RemoteWallClockTime", 0) * max(i.get("RequestCpus", 1), 1))
-        sum_cols["BadCpuTime"] = ((i.get("RemoteWallClockTime", 0) - goodput_time) * max(i.get("RequestCpus", 1), 1))
+        sum_cols["GoodCpuTime"] = (goodput_time * max(f.get("FlooredRequestCpus", 1), 1))
+        sum_cols["CpuTime"] = (i.get("RemoteWallClockTime", 0) * max(f.get("FlooredRequestCpus", 1), 1))
+        sum_cols["BadCpuTime"] = ((i.get("RemoteWallClockTime", 0) - goodput_time) * max(f.get("FlooredRequestCpus", 1), 1))
         sum_cols["JobUnitTime"] = job_units * i.get("RemoteWallClockTime", 0)
         sum_cols["NumShadowStarts"] = i.get("NumShadowStarts", 0)
         sum_cols["NumJobStarts"] = i.get("NumJobStarts", 0)
@@ -313,11 +313,11 @@ class ChtcScheddCpuOspoolMonthlyFilter(BaseFilter):
 
         max_cols = {}
         max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
-        max_cols["MaxRequestMemory"] = i.get("RequestMemory", 0)
+        max_cols["MaxRequestMemory"] = f.get("FlooredRequestMemory", 0)
         max_cols["MaxMemoryUsage"] = i.get("MemoryUsage", 0)
-        max_cols["MaxRequestDisk"] = i.get("RequestDisk", 0)
+        max_cols["MaxRequestDisk"] = f.get("FlooredRequestDisk", 0)
         max_cols["MaxDiskUsage"] = i.get("DiskUsage", 0)
-        max_cols["MaxRequestCpus"] = i.get("RequestCpus", 1)
+        max_cols["MaxRequestCpus"] = f.get("FlooredRequestCpus", 1)
         max_cols["MaxJobUnits"] = job_units
 
         min_cols = {}
@@ -338,6 +338,9 @@ class ChtcScheddCpuOspoolMonthlyFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Filter out jobs that did not run in the OS pool
         if not self.is_ospool_job(i.get("ScheddName"), i.get("LastRemotePool")):
             return
@@ -353,6 +356,9 @@ class ChtcScheddCpuOspoolMonthlyFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Filter out jobs that did not run in the OS pool
         if not self.is_ospool_job(i.get("ScheddName"), i.get("LastRemotePool")):
@@ -382,6 +388,9 @@ class ChtcScheddCpuOspoolMonthlyFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Filter out jobs that did not run in the OS pool
         if not self.is_ospool_job(i.get("ScheddName"), i.get("LastRemotePool")):
