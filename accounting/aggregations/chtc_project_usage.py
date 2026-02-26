@@ -841,8 +841,8 @@ def summarize_results(res, user: str) -> dict:
 def get_html(summary: dict, sort_col="Num Uniq Job Ids") -> str:
 
     def break_user(user: str):
-        zws = "&ZeroWidthSpace;"
-        return user.replace("@", f"{zws}@")
+        zwsp = "&#8203;"
+        return user.replace("@", f"{zwsp}@")
 
     def hhmm(hours: float):
         # Convert float hours to HH:MM
