@@ -1,12 +1,22 @@
 
 import re
+import sys
 import time
-import htcondor
 import pickle
 import statistics as stats
 from pathlib import Path
 from .BaseFilter import BaseFilter
 from accounting.functions import get_topology_project_data, get_topology_resource_data, get_institution_database
+
+try:
+    import htcondor2 as htcondor
+except ImportError:
+    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+    try:
+        import htcondor
+    except ImportError:
+        print("Could not import htcondor", file=sys.stderr)
+        raise
 
 
 DEFAULT_COLUMNS = {

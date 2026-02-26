@@ -2,23 +2,15 @@
 # parses cmd line args and handles outputs
 
 import elasticsearch
-from elasticsearch_dsl import Search, Q, A, connections
 import argparse
 import sys
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from pprint import pprint
 
 from query import run_query
-from functions import send_email 
-from report_helpers import (
-    Aggregation, 
-    add_runtime_script, 
-    get_percent_bucket_script, 
-    table, print_error, 
-    generate_csv
-)
+from functions import send_email
+from report_helpers import table, generate_csv
 
 OUTPUT_ARGS = {
     "--print-table" : {"action" : "store_true", "help" : "prints a CLI table, NOTE: pipe into 'less -S'"},

@@ -15,9 +15,15 @@ from email.utils import formatdate
 from pathlib import Path
 
 try:
-    import htcondor
-except ModuleNotFoundError:
-    htcondor = None
+    import htcondor2 as htcondor
+except ImportError:
+    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+    try:
+        import htcondor
+    except ImportError:
+        print("Could not import htcondor", file=sys.stderr)
+        htcondor = None
+
 from dns.resolver import query as dns_query
 
 

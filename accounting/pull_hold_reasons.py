@@ -1,7 +1,6 @@
 import pickle
 import tempfile
 import os
-import time
 import re
 from urllib.request import urlopen
 from pathlib import Path

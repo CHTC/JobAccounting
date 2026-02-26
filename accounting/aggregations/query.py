@@ -1,15 +1,10 @@
 import elasticsearch
 import argparse
-import sys
-import json
-from functions import send_email
-from elasticsearch_dsl import Search, Q, A, connections, response
-from datetime import datetime, timedelta
-from collections import namedtuple
+from elasticsearch_dsl import Search, Q, A, response
+from datetime import datetime
 from operator import itemgetter
-from pprint import pprint
 
-from report_helpers import Aggregation, add_runtime_script, get_percent_bucket_script, table, print_error
+from report_helpers import Aggregation, add_runtime_script, get_percent_bucket_script
 
 # lists to hold aggregation objects
 ROWS_AGGS = []

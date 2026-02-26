@@ -1,15 +1,22 @@
 import re
+import sys
 import pickle
-import htcondor
-import statistics as stats
 from collections import defaultdict
 from operator import itemgetter
 from ast import literal_eval
-import elasticsearch.helpers
 from functools import lru_cache
 from pathlib import Path
 from .BaseFilter import BaseFilter
 from accounting.functions import get_job_units
+
+try:
+    import htcondor2 as htcondor
+except ImportError:
+    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+    try:
+        import htcondor
+    except ImportError:
+        print("Could not import htcondor", file=sys.stderr)
 
 MAX_INT = 2**62
 

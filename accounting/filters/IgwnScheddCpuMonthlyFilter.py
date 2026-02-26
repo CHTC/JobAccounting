@@ -1,4 +1,3 @@
-from pathlib import Path
 from collections import defaultdict
 from operator import itemgetter
 from .BaseFilter import BaseFilter

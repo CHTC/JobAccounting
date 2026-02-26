@@ -1,12 +1,22 @@
 import re
+import sys
 import pickle
-import htcondor
 import statistics as stats
 from datetime import date
 from pathlib import Path
 from ast import literal_eval
 from .BaseFilter import BaseFilter
 from accounting.functions import get_job_units
+
+try:
+    import htcondor2 as htcondor
+except ImportError:
+    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+    try:
+        import htcondor
+    except ImportError:
+        print("Could not import htcondor", file=sys.stderr)
+        raise
 
 
 DEFAULT_COLUMNS = {
