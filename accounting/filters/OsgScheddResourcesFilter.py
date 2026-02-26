@@ -447,7 +447,7 @@ class OsgScheddResourcesFilter(BaseFilter):
                     memory_increase_factor = target_memory / request_memory
                 else:
                     increased_memory = True
-            except (ValueError, AttributeError,):
+            except (ValueError, AttributeError, TypeError,):
                 increased_memory = possible_vacates_due_to_resources > 0
 
         o["_NumJobsCanBumpRequestMemory"].append(int(can_increase_memory))
