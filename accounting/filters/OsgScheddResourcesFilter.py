@@ -764,7 +764,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Hrs"] = 0
 
-        memory_requests_sorted = self.clean(data['RequestMemory'])
+        memory_requests_sorted = self.clean(data['FlooredRequestMemory'])
         memory_requests_sorted.sort()
         if len(memory_requests_sorted) > 0:
             row["Min Allo Mem"]  = memory_requests_sorted[ 0] / 1024
@@ -783,7 +783,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Allo Mem"] = 0
 
-        memory_hours_requested_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["RequestMemory"], data["RemoteWallClockTime"])])
+        memory_hours_requested_sorted = self.clean([x*y if (None not in (x, y)) else None for x, y in zip(data["FlooredRequestMemory"], data["RemoteWallClockTime"])])
         memory_hours_requested_sorted.sort()
         if len(memory_hours_requested_sorted) > 0:
             row["Min Allo Mem GBh"]  = memory_hours_requested_sorted[ 0] / (1024*3600)
@@ -821,7 +821,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Use Mem"] = 0
 
-        memory_hours_usages_sorted = self.clean([min(req, use)*t if (None not in (req, use, t)) else None for use, req, t in zip(data["MemoryUsage"], data["RequestMemory"], data["RemoteWallClockTime"])])
+        memory_hours_usages_sorted = self.clean([min(req, use)*t if (None not in (req, use, t)) else None for use, req, t in zip(data["MemoryUsage"], data["FlooredRequestMemory"], data["RemoteWallClockTime"])])
         memory_hours_usages_sorted.sort()
         # if len(memory_hours_usages_sorted) > 0:
         #     row["Min Use Mem GBh"]  = memory_hours_usages_sorted[ 0] / (1024*3600)
@@ -840,7 +840,7 @@ class OsgScheddResourcesFilter(BaseFilter):
         #     # There is no variance if there is only one value
         #     row["Stdv Use Mem GBh"] = 0
 
-        memory_unusages_sorted = self.clean([max(req - use, 0) if (None not in (req, use)) else None for req, use in zip(data["RequestMemory"], data["MemoryUsage"])])
+        memory_unusages_sorted = self.clean([max(req - use, 0) if (None not in (req, use)) else None for req, use in zip(data["FlooredRequestMemory"], data["MemoryUsage"])])
         memory_unusages_sorted.sort()
         if len(memory_unusages_sorted) > 0:
             row["Min Unuse Mem"]  = memory_unusages_sorted[ 0] / 1024
@@ -859,7 +859,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Unuse Mem"] = 0
 
-        memory_hours_unusages_sorted = self.clean([max(req - use, 0)*t if (None not in (req, use, t)) else None for req, use, t in zip(data["RequestMemory"], data["MemoryUsage"], data["RemoteWallClockTime"])])
+        memory_hours_unusages_sorted = self.clean([max(req - use, 0)*t if (None not in (req, use, t)) else None for req, use, t in zip(data["FlooredRequestMemory"], data["MemoryUsage"], data["RemoteWallClockTime"])])
         memory_hours_unusages_sorted.sort()
         if len(memory_hours_unusages_sorted) > 0:
             row["Min Unuse Mem GBh"]  = memory_hours_unusages_sorted[ 0] / (1024*3600)
@@ -878,7 +878,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Unuse Mem GBh"] = 0
 
-        memory_utility_sorted = self.clean([100*x/y if ((None not in (x, y,)) and (y > 0)) else None for x, y in zip(data['MemoryUsage'], data['RequestMemory'])])
+        memory_utility_sorted = self.clean([100*x/y if ((None not in (x, y,)) and (y > 0)) else None for x, y in zip(data['MemoryUsage'], data['FlooredRequestMemory'])])
         memory_utility_sorted.sort()
         if len(memory_utility_sorted) > 0:
             row["Min Util% Mem"]  = memory_utility_sorted[ 0]
