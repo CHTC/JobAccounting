@@ -318,6 +318,9 @@ class OsgScheddGpuFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Get output dict for this schedd
         schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
         o = data["Schedds"][schedd]
@@ -361,12 +364,18 @@ class OsgScheddGpuFilter(BaseFilter):
 
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
-            o[attr].append(i.get(attr, None))
+            if attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
+            else:
+                o[attr].append(i.get(attr, None))
 
     def user_filter(self, data, doc):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this user
         user = i.get("User", "UNKNOWN") or "UNKNOWN"
@@ -415,6 +424,8 @@ class OsgScheddGpuFilter(BaseFilter):
             # Use UNKNOWN for missing or blank ProjectName and ScheddName
             if attr in {"ScheddName", "ProjectName"}:
                 o[attr].append(i.get(attr, i.get(attr.lower(), "UNKNOWN")) or "UNKNOWN")
+            elif attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
             else:
                 o[attr].append(i.get(attr, None))
 
@@ -422,6 +433,9 @@ class OsgScheddGpuFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this project
         project = i.get("ProjectName", i.get("projectname", "UNKNOWN")) or "UNKNOWN"
@@ -479,13 +493,19 @@ class OsgScheddGpuFilter(BaseFilter):
 
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
-            o[attr].append(i.get(attr, None))
+            if attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
+            else:
+                o[attr].append(i.get(attr, None))
 
 
     def institution_filter(self, data, doc):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Filter out jobs that did not run in the OS pool
         if not self.is_ospool_job(i):
@@ -522,7 +542,10 @@ class OsgScheddGpuFilter(BaseFilter):
 
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
-            o[attr].append(i.get(attr, None))
+            if attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
+            else:
+                o[attr].append(i.get(attr, None))
 
     def get_filters(self):
         # Add all filter methods to a list

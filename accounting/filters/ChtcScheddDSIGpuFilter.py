@@ -83,6 +83,9 @@ class ChtcScheddDSIGpuFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Get output dict for this project
         project = i.get("ProjectName", i.get("projectname", "UNKNOWN")) or "UNKNOWN"
         o = data["Projects"][project]
@@ -133,6 +136,8 @@ class ChtcScheddDSIGpuFilter(BaseFilter):
                     o[attr].append(int(float(i.get(attr))))
                 except TypeError:
                     o[attr].append(None)
+            elif attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
             else:
                 o[attr].append(i.get(attr, None))
 
@@ -141,6 +146,9 @@ class ChtcScheddDSIGpuFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Filter out jobs that were removed
         if i.get("JobStatus", 4) == 3:
@@ -164,7 +172,10 @@ class ChtcScheddDSIGpuFilter(BaseFilter):
 
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
-            o[attr].append(i.get(attr, None))
+            if attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
+            else:
+                o[attr].append(i.get(attr, None))
 
     def get_filters(self):
         # Add all filter methods to a list

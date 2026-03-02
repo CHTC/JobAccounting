@@ -8,6 +8,25 @@ import elasticsearch.helpers
 import importlib
 
 
+RESOURCE_TYPES = ["Cpus", "Memory", "Disk", "Gpus"]
+FLOORED_RESOURCE_FIELD = "FlooredRequest{resource}"
+FLOORED_RESOURCE_SCRIPT = """
+if (
+    doc.containsKey("{resource}Provisioned") &&
+    doc["{resource}Provisioned"].size() > 0 &&
+    doc.containsKey("Request{resource}") &&
+    doc["Request{resource}"].size() > 0 &&
+    doc["{resource}Provisioned"].value < doc["Request{resource}"].value
+    ) {{
+        emit(doc["{resource}Provisioned"].value);
+}} else if (
+    doc.containsKey("Request{resource}") &&
+    doc["Request{resource}"].size() > 0) {{
+        emit(doc["Request{resource}"].value);
+}}
+"""
+
+
 class BaseFilter:
     name = "job history"
 
@@ -97,6 +116,20 @@ class BaseFilter:
                 }
             }
         }
+
+        # Add floored resource requests (INF-3590)
+        fields = []
+        runtime_mappings = {}
+        for resource in RESOURCE_TYPES:
+            fields.append(FLOORED_RESOURCE_FIELD.format(resource=resource))
+            runtime_mappings[FLOORED_RESOURCE_FIELD.format(resource=resource)] = {
+                "type": "long",
+                "script": {
+                    "source": FLOORED_RESOURCE_SCRIPT.format(resource=resource)
+                }
+            }
+        query["fields"] = fields
+        query["runtime_mappings"] = runtime_mappings
         return query
 
     def user_filter(self, data, doc):

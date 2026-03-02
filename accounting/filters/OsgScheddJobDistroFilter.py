@@ -219,6 +219,9 @@ class OsgScheddJobDistroFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Filter out jobs that did not run in the OS pool
         if not self.is_ospool_job(i.get("ScheddName"), i.get("LastRemotePool")):
             return
@@ -228,8 +231,8 @@ class OsgScheddJobDistroFilter(BaseFilter):
         usages = data["JobUsages"]
 
         # Check for missing attrs
-        request_disk = i.get("RequestDisk")
-        request_memory = i.get("RequestMemory")
+        request_disk = f.get("FlooredRequestDisk")
+        request_memory = f.get("FlooredRequestMemory")
         skip_requests = None in [request_disk, request_memory]
 
         usage_disk = i.get("DiskUsage_RAW", i.get("DiskUsage"))
@@ -240,7 +243,7 @@ class OsgScheddJobDistroFilter(BaseFilter):
             total_jobs = requests.get("TotalJobs", 0)
             requests["TotalJobs"] = total_jobs + 1
             # Filter out jobs that request more than one core
-            if not i.get("RequestCpus", 1) > 1:
+            if not f.get("FlooredRequestCpus", 1) > 1:
                 histogram = requests.get("Histogram", defaultdict(int))
                 q_request_disk = self.quantize_disk(request_disk)
                 q_request_memory = self.quantize_memory(request_memory)
@@ -253,7 +256,7 @@ class OsgScheddJobDistroFilter(BaseFilter):
             total_jobs = usages.get("TotalJobs", 0)
             usages["TotalJobs"] = total_jobs + 1
             # Filter out jobs that request more than one core
-            if not i.get("RequestCpus", 1) > 1:
+            if not f.get("FlooredRequestCpus", 1) > 1:
                 histogram = usages.get("Histogram", defaultdict(int))
                 q_usage_disk = self.quantize_disk(usage_disk)
                 q_usage_memory = self.quantize_memory(usage_memory)
