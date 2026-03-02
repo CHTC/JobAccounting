@@ -80,33 +80,29 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         # (Dict has same structure as the REST API query language)
         query = super().get_query(index, start_ts, end_ts, **kwargs)
 
-        query.update({
-            "body": {
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {"range": {
-                                "RecordTime": {
-                                   "gte": start_ts,
-                                    "lt": end_ts,
-                                }
-                            }},
-                            {"regexp": {
-                                "ScheddName.keyword": ".*[.]chtc[.]wisc[.]edu"
-                            }}
-                        ],
-                        "must_not": [
-                            {"terms": {
-                                "JobUniverse": [7, 12]
-                            }},
-                        ],
-                    }
-                }
+        query["body"]["query"].update({
+            "bool": {
+                "filter": [
+                    {"range": {
+                        "RecordTime": {
+                            "gte": start_ts,
+                            "lt": end_ts,
+                        }
+                    }},
+                    {"regexp": {
+                        "ScheddName.keyword": ".*[.]chtc[.]wisc[.]edu"
+                    }}
+                ],
+                "must_not": [
+                    {"terms": {
+                        "JobUniverse": [7, 12]
+                    }},
+                ],
             }
         })
         return query
 
-    def reduce_data(self, i, o, t, is_site=False):
+    def reduce_data(self, i, f, o, t, is_site=False):
 
         is_removed = i.get("JobStatus") == 3
         is_dagnode = i.get("DAGNodeName") is not None
@@ -281,7 +277,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         output = data["Schedds"][schedd]
         total = data["Schedds"]["TOTAL"]
 
-        self.reduce_data(i, output, total)
+        self.reduce_data(i, f, output, total)
 
     def user_filter(self, data, doc):
 
@@ -296,7 +292,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         output = data["Users"][user]
         total = data["Users"]["TOTAL"]
 
-        self.reduce_data(i, output, total)
+        self.reduce_data(i, f, output, total)
 
         counter_cols = {}
         counter_cols["ScheddNames"] = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
@@ -324,7 +320,7 @@ class ChtcScheddCpuMonthlyFilter(BaseFilter):
         output = data["Projects"][project]
         total = data["Projects"]["TOTAL"]
 
-        self.reduce_data(i, output, total)
+        self.reduce_data(i, f, output, total)
 
         dict_cols = {}
         dict_cols["Users"] = i.get("User", "UNKNOWN") or "UNKNOWN"
