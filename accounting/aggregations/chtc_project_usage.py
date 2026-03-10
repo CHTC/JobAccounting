@@ -842,64 +842,61 @@ def get_html(summary: dict, sort_col="Num Uniq Job Ids") -> str:
 
     def break_user(user: str):
         zwsp = "&#8203;"
-        return user.replace("@", f"{zwsp}@")
+        user = user.replace("@", f"@{zwsp}")
+        return f"""<td style="{TEXT_TD_STYLE};">{user}</td>"""
+
+    def num(x, dtype=int, fmt=",d"):
+        try:
+            return f"""<td style="{NUMERIC_TD_STYLE};">{dtype(x):{fmt}}</td>"""
+        except TypeError:
+            if x is None:
+                return f"""<td style="{TEXT_TD_STYLE};"></td>"""
+        return f"""<td style="{NUMERIC_TD_STYLE}; text-align: right">{x}</td>"""
 
     def hhmm(hours: float):
+        if hours is None:
+            return f"""<td style="{TEXT_TD_STYLE};"></td>"""
         # Convert float hours to HH:MM
         h = int(hours)
         m = int(60 * (float(hours) - int(hours)))
-        return f"{h:02d}:{m:02d}"
-
-    def handle_dashes(dtype: type, fmt: str, value):
-        # Cast value to dtype and format it.
-        # Right-align any non-castable values and return them as is.
-        formatted_str = f"""<td style="{NUMERIC_TD_STYLE};"></td>"""
-        try:
-            value = dtype(value)
-            formatted_str = f"""<td style="{NUMERIC_TD_STYLE}">{value:{fmt}}</td>"""
-        except ValueError:
-            formatted_str = f"""<td style="{NUMERIC_TD_STYLE}; text-align: right">{value}</td>"""
-        except Exception as err:
-            print(f"Caught unexpected exception {str(err)} when converting {value} to {repr(dtype)}.", file=sys.stderr)
-            formatted_str = f"""<td style="{NUMERIC_TD_STYLE}; text-align: right">{value}</td>"""
-        return formatted_str
+        return f"""<td style="{NUMERIC_TD_STYLE};">{h:02d}:{m:02d}</td>"""
 
     def get_fmt(col: str):
         custom_fmts = {
-            "User":       lambda x: f"""<td style="{TEXT_TD_STYLE};">{break_user(x)}</td>""",
-            "Min Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "25% Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "Med Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "75% Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "95% Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "Max Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "Mean Hrs":   lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "Std Hrs":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "Mean Actv Hrs": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{hhmm(x)}</td>""",
-            "CPU Hours / Bad Exec Att": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
-            "Shadw Starts / Job Id":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.2f}</td>""",
-            "Exec Atts / Shadw Start":  lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.3f}</td>""",
-            "Holds / Job Id":           lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.2f}</td>""",
-            "OSDF Files Xferd":     lambda x: handle_dashes(  int,   ",", x),
-            "% OSDF Files":         lambda x: handle_dashes(float, ".1f", x),
-            "% OSDF Bytes":         lambda x: handle_dashes(float, ".1f", x),
-            "% Rm'd Jobs":          lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "% Short Jobs":         lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "% Jobs w/>1 Exec Att": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "% Jobs w/1+ Holds":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "% Jobs Over Rqst Disk": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "% Ckpt Able":          lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "% Jobs using S'ty":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "Input Files / Exec Att": lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
-            "Input MB / Exec Att":    lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "Input MB / File":        lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
-            "Output Files / Job":     lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
-            "Output MB / Job":        lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.0f}</td>""",
-            "Output MB / File":       lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
-            "Max Rqst Disk GB":       lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
-            "Max Used Disk GB":       lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{float(x):.1f}</td>""",
+            "User":       break_user,
+            "Min Hrs":    hhmm,
+            "25% Hrs":    hhmm,
+            "Med Hrs":    hhmm,
+            "75% Hrs":    hhmm,
+            "95% Hrs":    hhmm,
+            "Max Hrs":    hhmm,
+            "Mean Hrs":   hhmm,
+            "Std Hrs":    hhmm,
+            "Mean Actv Hrs": hhmm,
+            "CPU Hours / Bad Exec Att": lambda x: num(x, dtype=float, fmt=".1f"),
+            "Shadw Starts / Job Id":    lambda x: num(x, dtype=float, fmt=".2f"),
+            "Exec Atts / Shadw Start":  lambda x: num(x, dtype=float, fmt=".3f"),
+            "Holds / Job Id":           lambda x: num(x, dtype=float, fmt=".2f"),
+            "OSDF Files Xferd":     lambda x: num(x, dtype=int, fmt=",d"),
+            "% OSDF Files":         lambda x: num(x, dtype=float, fmt=".1f"),
+            "% OSDF Bytes":         lambda x: num(x, dtype=float, fmt=".1f"),
+            "% Rm'd Jobs":          lambda x: num(x, dtype=float, fmt=".0f"),
+            "% Short Jobs":         lambda x: num(x, dtype=float, fmt=".0f"),
+            "% Jobs w/>1 Exec Att": lambda x: num(x, dtype=float, fmt=".0f"),
+            "% Jobs w/1+ Holds":    lambda x: num(x, dtype=float, fmt=".0f"),
+            "% Jobs Over Rqst Disk": lambda x: num(x, dtype=float, fmt=".0f"),
+            "% Ckpt Able":          lambda x: num(x, dtype=float, fmt=".0f"),
+            "% Jobs using S'ty":    lambda x: num(x, dtype=float, fmt=".0f"),
+            "Input Files / Exec Att": lambda x: num(x, dtype=float, fmt=".1f"),
+            "Input MB / Exec Att":    lambda x: num(x, dtype=float, fmt=".0f"),
+            "Input MB / File":        lambda x: num(x, dtype=float, fmt=".1f"),
+            "Output Files / Job":     lambda x: num(x, dtype=float, fmt=".1f"),
+            "Output MB / Job":        lambda x: num(x, dtype=float, fmt=".0f"),
+            "Output MB / File":       lambda x: num(x, dtype=float, fmt=".1f"),
+            "Max Rqst Disk GB":       lambda x: num(x, dtype=float, fmt=".1f"),
+            "Max Used Disk GB":       lambda x: num(x, dtype=float, fmt=".1f"),
         }
-        return custom_fmts.get(col, lambda x: f"""<td style="{NUMERIC_TD_STYLE};">{int(x):,d}</td>""")
+        return custom_fmts.get(col, num)
 
     def get_legend():
         custom_items = {}
