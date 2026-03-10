@@ -118,21 +118,29 @@ DEFAULT_COLUMNS = {
 # """
 
 RESOURCE_TYPES = ["Cpus", "Memory", "Disk", "Gpus"]
+DEFAULT_RESOURCE_VALUE = {
+    "Cpus": 1,
+    "Memory": 1024,
+    "Disk": 1024**2,
+    "Gpus": 0,
+}
 FLOORED_RESOURCE_FIELD = "FlooredRequest{resource}"
 FLOORED_RESOURCE_SCRIPT = """
+long value = {default:d};
+if (
+    doc.containsKey("Request{resource}") &&
+    doc["Request{resource}"].size() > 0
+    ) {{
+    value = doc["Request{resource}"].value;
+}}
 if (
     doc.containsKey("{resource}Provisioned") &&
     doc["{resource}Provisioned"].size() > 0 &&
-    doc.containsKey("Request{resource}") &&
-    doc["Request{resource}"].size() > 0 &&
-    doc["{resource}Provisioned"].value < doc["Request{resource}"].value
+    doc["{resource}Provisioned"].value < value
     ) {{
-        emit(doc["{resource}Provisioned"].value);
-}} else if (
-    doc.containsKey("Request{resource}") &&
-    doc["Request{resource}"].size() > 0) {{
-        emit(doc["Request{resource}"].value);
+       value = doc["{resource}Provisioned"].value;
 }}
+emit(value);
 """
 
 HAS_SCRIPT_SRC = """
@@ -267,8 +275,11 @@ emit(gb);
 
 OVER_REQUEST_DISK_SRC = r"""
 boolean over = false;
-long request_disk = doc["RequestDisk"].value;
-if (doc.containsKey("DiskProvisioned") && doc["DiskProvisioned"].size() > 0 && doc["DiskProvisioned"].value < doc["RequestDisk"].value) {
+long request_disk = 1024*1024;
+if (doc.containsKey("RequestDisk") && doc["RequestDisk"].size() > 0) {
+    request_disk = doc["RequestDisk"].value;
+}
+if (doc.containsKey("DiskProvisioned") && doc["DiskProvisioned"].size() > 0 && doc["DiskProvisioned"].value < request_disk) {
     request_disk = doc["DiskProvisioned"].value;
 }
 if (doc.containsKey("DiskUsage") && doc["DiskUsage"].size() > 0) {
@@ -520,7 +531,7 @@ def get_query(
         runtime_mappings["runtime_mappings"][FLOORED_RESOURCE_FIELD.format(resource=resource)] = {
             "type": "long",
             "script": {
-                "source": FLOORED_RESOURCE_SCRIPT.format(resource=resource)
+                "source": FLOORED_RESOURCE_SCRIPT.format(resource=resource, default=DEFAULT_RESOURCE_VALUE[resource])
             }
         }
     for new_key, old_key in HAS_FIELDS.items():
