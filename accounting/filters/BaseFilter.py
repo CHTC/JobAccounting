@@ -1,5 +1,4 @@
 import logging
-import statistics as stats
 from collections import defaultdict
 from functools import partial
 from operator import itemgetter

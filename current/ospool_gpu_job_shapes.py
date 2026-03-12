@@ -1,3 +1,4 @@
+import sys
 import math
 import time
 import argparse
@@ -7,8 +8,17 @@ from datetime import datetime
 from typing import List, Tuple, Dict, Set, Union
 from pprint import pprint
 
-import htcondor
-import classad
+try:
+    import htcondor2 as htcondor
+    import classad2 as classad
+except ImportError:
+    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+    try:
+        import htcondor
+        import classad
+    except ImportError:
+        print("Could not import htcondor", file=sys.stderr)
+        raise
 
 
 DEFAULT_COLLECTOR = "cm-1.ospool.osg-htc.org"

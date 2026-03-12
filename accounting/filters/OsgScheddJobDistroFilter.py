@@ -1,13 +1,22 @@
 
 import re
-import htcondor
+import sys
 import pickle
 from pathlib import Path
-from elasticsearch import Elasticsearch
 import elasticsearch.helpers
 from .BaseFilter import BaseFilter
 from functools import lru_cache
 from collections import defaultdict
+
+try:
+    import htcondor2 as htcondor
+except ImportError:
+    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+    try:
+        import htcondor
+    except ImportError:
+        print("Could not import htcondor", file=sys.stderr)
+        raise
 
 
 OSG_CONNECT_APS = {
