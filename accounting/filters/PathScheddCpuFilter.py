@@ -113,6 +113,9 @@ class PathScheddCpuFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Get output dict for this project
         project = i.get("ProjectName", i.get("projectname", "UNKNOWN")) or "UNKNOWN"
         o = data["Projects"][project]
@@ -161,6 +164,8 @@ class PathScheddCpuFilter(BaseFilter):
                     o[attr].append(int(float(i.get(attr))))
                 except TypeError:
                     o[attr].append(None)
+            elif attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
             else:
                 o[attr].append(i.get(attr, None))
 
@@ -168,6 +173,9 @@ class PathScheddCpuFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this schedd
         schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
@@ -216,6 +224,8 @@ class PathScheddCpuFilter(BaseFilter):
                     o[attr].append(int(float(i.get(attr))))
                 except TypeError:
                     o[attr].append(None)
+            elif attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
             else:
                 o[attr].append(i.get(attr, None))
 
@@ -223,6 +233,9 @@ class PathScheddCpuFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this user
         user = i.get("User", "UNKNOWN") or "UNKNOWN"
@@ -275,6 +288,8 @@ class PathScheddCpuFilter(BaseFilter):
                     o[attr].append(int(float(i.get(attr))))
                 except TypeError:
                     o[attr].append(None)
+            elif attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
             else:
                 o[attr].append(i.get(attr, None))
 
