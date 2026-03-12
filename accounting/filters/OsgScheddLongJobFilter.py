@@ -260,7 +260,7 @@ class OsgScheddLongJobFilter(BaseFilter):
         row["Num Holds"] = data["NumHolds"][0] or 0
 
         row["Rqst Cpus"] = data["RequestCpus"][0] or 1
-        row["CPUs Used"] = data["CPUsUsage"][0]
+        row["CPUs Used"] = cpus_usage
         row["Rqst Gpus"] = data["RequestGpus"][0]
         row["Rqst Mem GB"] = (data["RequestMemory"][0] or 0) / 1024
         row["Mem Used GB"] = (data["MemoryUsage"][0] or 0) / 1024
