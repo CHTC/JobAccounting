@@ -183,7 +183,7 @@ CKPTABLE_SCRIPT_SRC = r"""
         doc["WhenToTransferOutput.keyword"].size() > 0 &&
         doc.containsKey("Is_resumable") &&
         doc["Is_resumable"].size() > 0) {
-        is_ckptable = doc["WhenToTransferOutput.keyword"].value == "ON_EXIT_OR_EVICT" && doc["Is_resumable"];
+        is_ckptable = doc["WhenToTransferOutput.keyword"].value == "ON_EXIT_OR_EVICT" && doc["Is_resumable"].value;
     }
     emit(is_ckptable);
 """
