@@ -3,7 +3,6 @@ import json
 import argparse
 import importlib
 
-from operator import itemgetter
 from datetime import datetime, timedelta
 from pathlib import Path
 
