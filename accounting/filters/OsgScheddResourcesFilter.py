@@ -108,6 +108,25 @@ DEFAULT_FILTER_ATTRS = [
 ]
 
 
+RESOURCE_TYPES = ["Cpus", "Memory", "Disk", "Gpus"]
+FLOORED_RESOURCE_FIELD = "FlooredRequest{resource}"
+FLOORED_RESOURCE_SCRIPT = """
+if (
+    doc.containsKey("{resource}Provisioned") &&
+    doc["{resource}Provisioned"].size() > 0 &&
+    doc.containsKey("Request{resource}") &&
+    doc["Request{resource}"].size() > 0 &&
+    doc["{resource}Provisioned"].value < doc["Request{resource}"].value
+    ) {{
+        emit(doc["{resource}Provisioned"].value);
+}} else if (
+    doc.containsKey("Request{resource}") &&
+    doc["Request{resource}"].size() > 0) {{
+        emit(doc["Request{resource}"].value);
+}}
+"""
+
+
 # INSTITUTION_DB = get_institution_database()
 # RESOURCE_DATA = get_topology_resource_data()
 
@@ -259,6 +278,19 @@ class OsgScheddResourcesFilter(BaseFilter):
                 }
             }
         }
+        # Add floored resource requests (INF-3590)
+        fields = []
+        runtime_mappings = {}
+        for resource in RESOURCE_TYPES:
+            fields.append(FLOORED_RESOURCE_FIELD.format(resource=resource))
+            runtime_mappings[FLOORED_RESOURCE_FIELD.format(resource=resource)] = {
+                "type": "long",
+                "script": {
+                    "source": FLOORED_RESOURCE_SCRIPT.format(resource=resource)
+                }
+            }
+        query["fields"] = fields
+        query["runtime_mappings"] = runtime_mappings
         return query
 
 
@@ -266,6 +298,9 @@ class OsgScheddResourcesFilter(BaseFilter):
 
     #     # Get input dict
     #     i = doc["_source"]
+
+    #     # Get computed fields (as single values instead of arrays)
+    #     f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
     #     # Get output dict for this schedd
     #     schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
@@ -311,21 +346,27 @@ class OsgScheddResourcesFilter(BaseFilter):
     #     # Compute job units
     #     if i.get("RemoteWallClockTime", 0) > 0:
     #         o["NumJobUnits"].append(get_job_units(
-    #             cpus=i.get("RequestCpus", 1),
-    #             memory_gb=i.get("RequestMemory", 1024)/1024,
-    #             disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
+    #             cpus=f.get("FlooredRequestCpus", 1),
+    #             memory_gb=f.get("FlooredRequestMemory", 1024)/1024,
+    #             disk_gb=f.get("FlooredRequestDisk", 1024**2)/1024**2,
     #         ))
     #     else:
     #         o["NumJobUnits"].append(None)
 
     #     # Add attr values to the output dict, use None if missing
     #     for attr in filter_attrs:
-    #         o[attr].append(i.get(attr, None))
+    #         if attr.startswith("Request"):
+    #             o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
+    #         else:
+    #             o[attr].append(i.get(attr, None))
 
     # def user_filter(self, data, doc):
 
     #     # Get input dict
     #     i = doc["_source"]
+
+    #     # Get computed fields (as single values instead of arrays)
+    #     f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
     #     # Get output dict for this user
     #     user = i.get("User", "UNKNOWN") or "UNKNOWN"
@@ -372,9 +413,9 @@ class OsgScheddResourcesFilter(BaseFilter):
     #     # Compute job units
     #     if i.get("RemoteWallClockTime", 0) > 0:
     #         o["NumJobUnits"].append(get_job_units(
-    #             cpus=i.get("RequestCpus", 1),
-    #             memory_gb=i.get("RequestMemory", 1024)/1024,
-    #             disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
+    #             cpus=f.get("FlooredRequestCpus", 1),
+    #             memory_gb=f.get("FlooredRequestMemory", 1024)/1024,
+    #             disk_gb=f.get("FlooredRequestDisk", 1024**2)/1024**2,
     #         ))
     #     else:
     #         o["NumJobUnits"].append(None)
@@ -384,6 +425,8 @@ class OsgScheddResourcesFilter(BaseFilter):
     #         # Use UNKNOWN for missing or blank ProjectName and ScheddName
     #         if attr in {"ScheddName", "ProjectName"}:
     #             o[attr].append(i.get(attr, i.get(attr.lower(), "UNKNOWN")) or "UNKNOWN")
+    #         elif attr.startswith("Request"):
+    #             o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
     #         else:
     #             o[attr].append(i.get(attr, None))
 
@@ -391,6 +434,9 @@ class OsgScheddResourcesFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this project
         project = i.get("ProjectName", i.get("projectname", "UNKNOWN")) or "UNKNOWN"
@@ -427,13 +473,13 @@ class OsgScheddResourcesFilter(BaseFilter):
         increased_memory = False
         if can_increase_memory:
             try:
-                request_memory = int(i.get("RequestMemory"))
+                request_memory = int(f.get("FlooredRequestMemory", i.get("RequestMemory")))
                 target_memory = int(TRANSFORM_REQUEST_MEMORY_RE.match(increase_memory_expr).group(1))
                 if target_memory > request_memory:
                     memory_increase_factor = target_memory / request_memory
                 else:
                     increased_memory = True
-            except (ValueError, AttributeError,):
+            except (ValueError, AttributeError, TypeError,):
                 increased_memory = possible_vacates_due_to_resources > 0
 
         o["_NumJobsCanBumpRequestMemory"].append(int(can_increase_memory))
@@ -442,13 +488,19 @@ class OsgScheddResourcesFilter(BaseFilter):
 
         # Add attr values to the output dict, use None if missing
         for attr in filter_attrs:
-            o[attr].append(i.get(attr, None))
+            if attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
+            else:
+                o[attr].append(i.get(attr, None))
 
 
     # def institution_filter(self, data, doc):
 
     #     # Get input dict
     #     i = doc["_source"]
+
+    #     # Get computed fields (as single values instead of arrays)
+    #     f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
     #     # Filter out jobs that did not run in the OS pool
     #     if not self.is_ospool_job(i):
@@ -486,16 +538,19 @@ class OsgScheddResourcesFilter(BaseFilter):
     #     # Compute job units
     #     if i.get("RemoteWallClockTime", 0) > 0:
     #         o["NumJobUnits"].append(get_job_units(
-    #             cpus=i.get("RequestCpus", 1),
-    #             memory_gb=i.get("RequestMemory", 1024)/1024,
-    #             disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
+    #             cpus=f.get("FlooredRequestCpus", 1),
+    #             memory_gb=f.get("FlooredRequestMemory", 1024)/1024,
+    #             disk_gb=f.get("FlooredRequestDisk", 1024**2)/1024**2,
     #         ))
     #     else:
     #         o["NumJobUnits"].append(None)
 
     #     # Add attr values to the output dict, use None if missing
     #     for attr in filter_attrs:
-    #         o[attr].append(i.get(attr, None))
+    #         if attr.startswith("Request"):
+    #             o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
+    #         else:
+    #             o[attr].append(i.get(attr, None))
 
     def get_filters(self):
         # Add all filter methods to a list
@@ -602,7 +657,7 @@ class OsgScheddResourcesFilter(BaseFilter):
     #     row["Num Jobs Over Rqst Disk"] = sum([(usage or 0) > (request or 1)
     #         for (usage, request) in zip(data["DiskUsage"], data["RequestDisk"])])
     #     row["Num Short Jobs"]   = sum(self.clean(is_short_job))
-    #     row["Max Rqst Mem MB"]  = max(self.clean(data['RequestMemory'], allow_empty_list=False))
+    #     row["Max Rqst Mem MB"]  = max(self.clean(data["RequestMemory"], allow_empty_list=False))
     #     row["Med Used Mem MB"]  = stats.median(self.clean(data["MemoryUsage"], allow_empty_list=False))
     #     row["Max Used Mem MB"]  = max(self.clean(data["MemoryUsage"], allow_empty_list=False))
     #     row["Max Rqst Disk GB"] = max(self.clean(data["RequestDisk"], allow_empty_list=False)) / (1000*1000)
@@ -741,7 +796,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Hrs"] = 0
 
-        memory_requests_sorted = self.clean(data['RequestMemory'])
+        memory_requests_sorted = self.clean(data["RequestMemory"])
         memory_requests_sorted.sort()
         if len(memory_requests_sorted) > 0:
             row["Min Allo Mem"]  = memory_requests_sorted[ 0] / 1024
@@ -779,7 +834,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Allo Mem GBh"] = 0
 
-        memory_usages_sorted = self.clean(data['MemoryUsage'])
+        memory_usages_sorted = self.clean(data["MemoryUsage"])
         memory_usages_sorted.sort()
         if len(memory_usages_sorted) > 0:
             row["Min Use Mem"]  = memory_usages_sorted[ 0] / 1024
@@ -855,7 +910,7 @@ class OsgScheddResourcesFilter(BaseFilter):
             # There is no variance if there is only one value
             row["Stdv Unuse Mem GBh"] = 0
 
-        memory_utility_sorted = self.clean([100*x/y if ((None not in (x, y,)) and (y > 0)) else None for x, y in zip(data['MemoryUsage'], data['RequestMemory'])])
+        memory_utility_sorted = self.clean([100*x/y if ((None not in (x, y,)) and (y > 0)) else None for x, y in zip(data["MemoryUsage"], data["RequestMemory"])])
         memory_utility_sorted.sort()
         if len(memory_utility_sorted) > 0:
             row["Min Util% Mem"]  = memory_utility_sorted[ 0]

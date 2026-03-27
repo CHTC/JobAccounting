@@ -144,6 +144,9 @@ class IgwnScheddCpuFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Get output dict for this schedd
         schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
         o = data["Schedds"][schedd]
@@ -187,9 +190,9 @@ class IgwnScheddCpuFilter(BaseFilter):
         # Compute job units
         if i.get("RemoteWallClockTime", 0) > 0:
             o["NumJobUnits"].append(get_job_units(
-                cpus=i.get("RequestCpus", 1),
-                memory_gb=i.get("RequestMemory", 1024)/1024,
-                disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
+                cpus=f.get("FlooredRequestCpus", 1),
+                memory_gb=f.get("FlooredRequestMemory", 1024)/1024,
+                disk_gb=f.get("FlooredRequestDisk", 1024**2)/1024**2,
             ))
         else:
             o["NumJobUnits"].append(None)
@@ -201,6 +204,8 @@ class IgwnScheddCpuFilter(BaseFilter):
                     o[attr].append(int(float(i.get(attr))))
                 except TypeError:
                     o[attr].append(None)
+            elif attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
             else:
                 o[attr].append(i.get(attr, None))
 
@@ -208,6 +213,9 @@ class IgwnScheddCpuFilter(BaseFilter):
 
         # Get input dict
         i = doc["_source"]
+
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
 
         # Get output dict for this user
         user = i.get("User", "UNKNOWN") or "UNKNOWN"
@@ -253,9 +261,9 @@ class IgwnScheddCpuFilter(BaseFilter):
         # Compute job units
         if i.get("RemoteWallClockTime", 0) > 0:
             o["NumJobUnits"].append(get_job_units(
-                cpus=i.get("RequestCpus", 1),
-                memory_gb=i.get("RequestMemory", 1024)/1024,
-                disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
+                cpus=f.get("FlooredRequestCpus", 1),
+                memory_gb=f.get("FlooredRequestMemory", 1024)/1024,
+                disk_gb=f.get("FlooredRequestDisk", 1024**2)/1024**2,
             ))
         else:
             o["NumJobUnits"].append(None)
@@ -270,6 +278,8 @@ class IgwnScheddCpuFilter(BaseFilter):
                     o[attr].append(int(float(i.get(attr))))
                 except TypeError:
                     o[attr].append(None)
+            elif attr.startswith("Request"):
+                o[attr].append(f.get(f"Floored{attr}", i.get(attr, None)))
             else:
                 o[attr].append(i.get(attr, None))
 
