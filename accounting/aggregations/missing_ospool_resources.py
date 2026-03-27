@@ -276,7 +276,7 @@ def main():
         args.end = args.start + timedelta(days=1)
     days = (args.end - args.start).days
 
-    es = connect(**es_args, timeout=30 + int(10 * (days**0.75)))
+    es = connect(**es_args, timeout=30 + int(15 * (days**0.75)))
     es.info()
 
     base_query = get_query(
