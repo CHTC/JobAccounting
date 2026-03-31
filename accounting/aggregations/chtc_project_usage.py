@@ -1,11 +1,8 @@
-import re
 import sys
-import time
 import json
 import argparse
 import importlib
 
-from operator import itemgetter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -183,7 +180,7 @@ CKPTABLE_SCRIPT_SRC = r"""
         doc["WhenToTransferOutput.keyword"].size() > 0 &&
         doc.containsKey("Is_resumable") &&
         doc["Is_resumable"].size() > 0) {
-        is_ckptable = doc["WhenToTransferOutput.keyword"].value == "ON_EXIT_OR_EVICT" && doc["Is_resumable"];
+        is_ckptable = doc["WhenToTransferOutput.keyword"].value == "ON_EXIT_OR_EVICT" && doc["Is_resumable"].value;
     }
     emit(is_ckptable);
 """
@@ -373,6 +370,8 @@ def parse_args() -> argparse.Namespace:
         es_args.add_argument(name, **properties)
 
     parser.add_argument("--project", required=True)
+    parser.add_argument("--users", action="store_true")
+    parser.add_argument("--anonymize", action="store_true")
     parser.add_argument("--start", type=valid_date)
     parser.add_argument("--end", type=valid_date)
 
@@ -436,6 +435,7 @@ def get_query(
         project,
         start,
         end,
+        agg_users=False,
         ):
     query = Search(using=client, index=index) \
             .extra(size=0) \
@@ -758,7 +758,8 @@ def get_query(
         users_agg.metric(agg_name, agg)
         query.aggs.metric(agg_name, agg)
 
-    query.aggs.bucket("users", users_agg)
+    if agg_users:
+        query.aggs.bucket("users", users_agg)
 
     return query
 
@@ -1032,8 +1033,9 @@ def main():
         index=index,
         project=args.project,
         start=args.start,
-        end=args.end
-        )
+        end=args.end,
+        agg_users=args.users,
+    )
 
     try:
         result = query.execute()
@@ -1044,13 +1046,15 @@ def main():
             pass
         raise err
 
-    print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
     summary = {}
     summary["TOTAL"] = summarize_results(result, "TOTAL")
     if summary["TOTAL"]:
-        for bucket in result.aggregations.users.buckets:
-            summary[bucket["key"]] = summarize_results(bucket, bucket["key"])
-        print(json.dumps(summary, indent=2))
+        if args.users:
+            for i_user, bucket in enumerate(result.aggregations.users.buckets):
+                user = bucket["key"]
+                if args.anonymize:
+                    user = f"user{i_user}"
+                summary[user] = summarize_results(bucket, user)
         html = get_html(summary)
     else:
         html = f"<html><body>No usage found during the reporting period</body></html>"

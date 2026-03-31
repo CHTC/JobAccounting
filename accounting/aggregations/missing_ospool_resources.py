@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from functools import lru_cache
 
-from functions import get_ospool_aps, get_topology_project_data, send_email, OSPOOL_COLLECTORS, NON_OSPOOL_RESOURCES
+from functions import get_ospool_aps, get_topology_resource_data, get_institution_database, send_email, OSPOOL_COLLECTORS, NON_OSPOOL_RESOURCES
 
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
@@ -39,31 +39,19 @@ ELASTICSEARCH_ARGS = {
     }
 }
 
-PROJECT_TOPOLOGY_DATA = get_topology_project_data()
+RESOURCE_TOPOLOGY_DATA = get_topology_resource_data()
+INSTITUTION_DATABASE = get_institution_database()
 PICKLED_AP_COLLECTOR_HOSTS_CACHE_FILE = Path().home() / "JobAccounting" / "ospool-host-map.pkl"
-
-PROJECT_NAME_SCRIPT_SRC = """
-String res;
-if (doc.containsKey("ProjectName") && doc["ProjectName.keyword"].size() > 0) {
-    res = doc["ProjectName.keyword"].value;
-} else if (doc.containsKey("projectname") && doc["projectname.keyword"].size() > 0) {
-    res = doc["projectname.keyword"].value;
-} else {
-    res = "ProjectName undefined";
-}
-emit(res);
-"""
 
 RESOURCE_NAME_SCRIPT_SRC = """
 String res;
 if (doc.containsKey("MachineAttrGLIDEIN_ResourceName0") && doc["MachineAttrGLIDEIN_ResourceName0.keyword"].size() > 0) {
     res = doc["MachineAttrGLIDEIN_ResourceName0.keyword"].value;
+    emit(res);
 } else if (doc.containsKey("MATCH_EXP_JOBGLIDEIN_ResourceName") && doc["MATCH_EXP_JOBGLIDEIN_ResourceName.keyword"].size() > 0) {
     res = doc["MATCH_EXP_JOBGLIDEIN_ResourceName.keyword"].value;
-} else {
-    res = "Resource name not defined";
+    emit(res);
 }
-emit(res);
 """
 
 
@@ -160,12 +148,6 @@ def get_query(
 
     runtime_mappings = {
         "runtime_mappings": {
-            "ProjectNameFixed": {
-                "type": "keyword",
-                "script": {
-                    "source": PROJECT_NAME_SCRIPT_SRC,
-                }
-            },
             "ResourceName": {
                 "type": "keyword",
                 "script": {
@@ -197,21 +179,41 @@ def get_query(
         field="RecordTime",
     )
 
+    example_jobid_agg = A(
+        "top_hits",
+        size=1,
+        **{"_source": False},
+        docvalue_fields=["GlobalJobId.keyword"],
+    )
+
     aps_agg = A(
         "terms",
         field="ScheddName.keyword",
-        size=8,
+        size=5,
     )
 
-    project_name_agg = A(
+    resource_name_agg = A(
         "terms",
-        field="ProjectNameFixed",
+        field="ResourceName",
+        missing="UNKNOWN",
         size=512,
     )
-    project_name_agg.metric("last_seen", last_seen_agg)
-    project_name_agg.bucket("aps", aps_agg)
+    resource_name_agg.metric("last_seen", last_seen_agg)
+    resource_name_agg.metric("example_jobid", example_jobid_agg)
+    resource_name_agg.metric("aps", aps_agg)
 
-    query.aggs.bucket("project_name", project_name_agg)
+    resource_id_agg = A(
+        "terms",
+        field="MachineAttrOSG_INSTITUTION_ID0.keyword",
+        missing="UNKNOWN",
+        size=512,
+    )
+    resource_id_agg.metric("last_seen", last_seen_agg)
+    resource_id_agg.metric("example_jobid", example_jobid_agg)
+    resource_id_agg.metric("aps", aps_agg)
+
+    query.aggs.bucket("resource_name", resource_name_agg)
+    query.aggs.bucket("resource_id", resource_id_agg)
 
     return query
 
@@ -251,6 +253,8 @@ def convert_buckets_to_dict(buckets: list):
                 row[key] = value["value"]
             elif isinstance(value, dict) and "buckets" in value:
                 row[key] = convert_buckets_to_dict(value["buckets"])
+            elif isinstance(value, dict) and "hits" in value:
+                row[key] = value["hits"]["hits"][0]["fields"]
         bucket_data[bucket_name] = row
     return bucket_data
 
@@ -272,7 +276,7 @@ def main():
         args.end = args.start + timedelta(days=1)
     days = (args.end - args.start).days
 
-    es = connect(**es_args, timeout=30 + int(10 * (days**0.75)))
+    es = connect(**es_args, timeout=30 + int(15 * (days**0.75)))
     es.info()
 
     base_query = get_query(
@@ -293,45 +297,135 @@ def main():
         raise err
     print(f"{datetime.now()} - Done.")
 
-    project_name_data = convert_buckets_to_dict(result.aggregations.project_name.buckets)
+    resource_name_data = convert_buckets_to_dict(result.aggregations.resource_name.buckets)
+    resource_id_data = convert_buckets_to_dict(result.aggregations.resource_id.buckets)
 
-    missing_projects = []
-    for project_name, d in project_name_data.items():
-        if project_name.lower() not in PROJECT_TOPOLOGY_DATA:
-            missing_projects.append({
-                "project_name": project_name,
-                "jobs": d["value"],
-                "last_seen": datetime.fromtimestamp(int(d["last_seen"])),
-                "num_aps": len(d["aps"]),
-                "ap_list": ", ".join(list(d["aps"].keys()))
-            })
+    job_missing_resource_name = []
+    topology_missing_resource_name = []
+    topology_missing_institution_id = []
+    database_missing_institution_id = []
 
-    missing_projects.sort(key=itemgetter("last_seen"), reverse=True)
+    for resource_name, d in resource_name_data.items():
+        resource_data = {
+            "resource_name": resource_name,
+            "jobs": d["value"],
+            "last_seen": datetime.fromtimestamp(int(d["last_seen"])),
+            "example_jobid": d["example_jobid"]["GlobalJobId.keyword"][0],
+            "aps": list(d["aps"].keys()),
+        }
+        if resource_name == "UNKNOWN":
+            job_missing_resource_name.append(resource_data)
+            continue
+        if not RESOURCE_TOPOLOGY_DATA.get(resource_name.lower()):
+            topology_missing_resource_name.append(resource_data)
+            continue
+        topology_data = RESOURCE_TOPOLOGY_DATA[resource_name.lower()]
+        if not topology_data.get("institution_id"):
+            topology_missing_institution_id.append(resource_data)
+            continue
+        institution_id = topology_data["institution_id"]
+        resource_data["institution_id"] = institution_id
+        if not INSTITUTION_DATABASE.get(institution_id):
+            database_missing_institution_id.append(resource_data)
+
+    for resource_institution_id, d in resource_id_data.items():
+        if resource_institution_id == "UNKNOWN":
+            continue
+        resource_institution_id = resource_institution_id.split("_")[-1]
+        resource_data = {
+            "institution_id": resource_institution_id,
+            "jobs": d["value"],
+            "last_seen": datetime.fromtimestamp(int(d["last_seen"])),
+            "example_jobid": d["example_jobid"]["GlobalJobId.keyword"][0],
+            "aps": list(d["aps"].keys()),
+        }
+        if not INSTITUTION_DATABASE.get(resource_institution_id):
+            database_missing_institution_id.append(resource_data)
+
+    topology_missing_resource_name.sort(key=itemgetter("last_seen"), reverse=True)
+    topology_missing_institution_id.sort(key=itemgetter("last_seen"), reverse=True)
+    database_missing_institution_id.sort(key=itemgetter("last_seen"), reverse=True)
 
     text_style = "border: 1px solid black"
     numeric_style = "text-align: right; border: 1px solid black"
     lr = "\n"
     tab = "\t"
+    html_tables = []
+
     html_table = []
+    html_table.append("<p>Resource Name missing from job ClassAd</p>")
     html_table.append('<table style="border-collapse: collapse">')
     html_table.append("\t<tr>")
-    table_header = ["Last Seen", "Project", "Num Jobs", "Num APs", "AP List"]
+    table_header = ["Last Seen", "Num Jobs", "Example Job Id", "Top 5 APs"]
     html_table.append(f'''{tab}{tab}<th style="{text_style}">{f'</th>{lr}{tab}{tab}<th style="{text_style}">'.join(table_header)}</th>{lr}''')
     html_table.append("\t</tr>")
-    for missing_project in missing_projects:
+    html_table.append("\t<tr>")
+    html_table.append(f'\t\t<td style="{numeric_style}">{job_missing_resource_name[0]["last_seen"].strftime(r"%Y-%m-%d")}</td>')
+    html_table.append(f'\t\t<td style="{numeric_style}">{job_missing_resource_name[0]["jobs"]}</td>')
+    html_table.append(f'\t\t<td style="{text_style}">{job_missing_resource_name[0]["example_jobid"]}</td>')
+    html_table.append(f'\t\t<td style="{text_style}">{", ".join(job_missing_resource_name[0]["aps"])}</td>')
+    html_table.append("\t</tr>")
+    html_table.append("</table>")
+    html_tables.append(lr.join(html_table))
+
+    html_table = []
+    html_table.append("<p>Resource Name missing from Topology</p>")
+    html_table.append('<table style="border-collapse: collapse">')
+    html_table.append("\t<tr>")
+    table_header = ["Last Seen", "Resource Name", "Num Jobs", "Example Job Id", "Top 5 APs"]
+    html_table.append(f'''{tab}{tab}<th style="{text_style}">{f'</th>{lr}{tab}{tab}<th style="{text_style}">'.join(table_header)}</th>{lr}''')
+    html_table.append("\t</tr>")
+    for missing_resource in topology_missing_resource_name:
         html_table.append("\t<tr>")
-        html_table.append(f'\t\t<td style="{numeric_style}">{missing_project["last_seen"].strftime(r"%Y-%m-%d")}</td>')
-        html_table.append(f'\t\t<td style="{text_style}">{missing_project["project_name"]}</td>')
-        html_table.append(f'\t\t<td style="{numeric_style}">{missing_project["jobs"]}</td>')
-        html_table.append(f'\t\t<td style="{numeric_style}">{missing_project["num_aps"]}</td>')
-        html_table.append(f'\t\t<td style="{text_style}">{missing_project["ap_list"]}</td>')
+        html_table.append(f'\t\t<td style="{numeric_style}">{missing_resource["last_seen"].strftime(r"%Y-%m-%d")}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{missing_resource["resource_name"]}</td>')
+        html_table.append(f'\t\t<td style="{numeric_style}">{missing_resource["jobs"]}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{missing_resource["example_jobid"]}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{", ".join(missing_resource["aps"])}</td>')
         html_table.append("\t</tr>")
     html_table.append("</table>")
+    html_tables.append(lr.join(html_table))
 
-    html = f"<html>\n<head></head>\n<body>\n{lr.join(html_table)}\n</body>\n</html>"
+    html_table = []
+    html_table.append("<p>Institution ID missing from Topology</p>")
+    html_table.append('<table style="border-collapse: collapse">')
+    html_table.append("\t<tr>")
+    table_header = ["Last Seen", "Resource Name", "Num Jobs", "Example Job Id", "Top 5 APs"]
+    html_table.append(f'''{tab}{tab}<th style="{text_style}">{f'</th>{lr}{tab}{tab}<th style="{text_style}">'.join(table_header)}</th>{lr}''')
+    html_table.append("\t</tr>")
+    for missing_resource in topology_missing_institution_id:
+        html_table.append("\t<tr>")
+        html_table.append(f'\t\t<td style="{numeric_style}">{missing_resource["last_seen"].strftime(r"%Y-%m-%d")}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{missing_resource["resource_name"]}</td>')
+        html_table.append(f'\t\t<td style="{numeric_style}">{missing_resource["jobs"]}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{missing_resource["example_jobid"]}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{", ".join(missing_resource["aps"])}</td>')
+        html_table.append("\t</tr>")
+    html_table.append("</table>")
+    html_tables.append(lr.join(html_table))
+
+    html_table = []
+    html_table.append("<p>Institution ID missing from Database</p>")
+    html_table.append('<table style="border-collapse: collapse">')
+    html_table.append("\t<tr>")
+    table_header = ["Last Seen", "(Short) Institution ID", "Num Jobs", "Example Job Id", "Top 5 APs"]
+    html_table.append(f'''{tab}{tab}<th style="{text_style}">{f'</th>{lr}{tab}{tab}<th style="{text_style}">'.join(table_header)}</th>{lr}''')
+    html_table.append("\t</tr>")
+    for missing_resource in database_missing_institution_id:
+        html_table.append("\t<tr>")
+        html_table.append(f'\t\t<td style="{numeric_style}">{missing_resource["last_seen"].strftime(r"%Y-%m-%d")}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{missing_resource["institution_id"]}</td>')
+        html_table.append(f'\t\t<td style="{numeric_style}">{missing_resource["jobs"]}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{missing_resource["example_jobid"]}</td>')
+        html_table.append(f'\t\t<td style="{text_style}">{", ".join(missing_resource["aps"])}</td>')
+        html_table.append("\t</tr>")
+    html_table.append("</table>")
+    html_tables.append(lr.join(html_table))
+
+    html = f"<html>\n<head></head>\n<body>\n{lr.join(html_tables)}\n</body>\n</html>"
 
     send_email(
-        subject=f"OSPool Unmapped Projects {args.start.strftime(r'%Y-%m-%d')} to {args.end.strftime(r'%Y-%m-%d')}",
+        subject=f"OSPool Unmapped Resources {args.start.strftime(r'%Y-%m-%d')} to {args.end.strftime(r'%Y-%m-%d')}",
         from_addr=args.from_addr,
         to_addrs=args.to,
         html=html,
