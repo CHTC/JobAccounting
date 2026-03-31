@@ -99,7 +99,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         })
         return query
 
-    def reduce_data(self, i, o, t, is_site=False):
+    def reduce_data(self, i, f, o, t, is_site=False):
 
         is_removed = i.get("JobStatus") == 3
         is_dagnode = i.get("DAGNodeName") is not None
@@ -116,7 +116,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
                 i.get("SuccessCheckpointExitBySignal", False) or
                 i.get("SuccessCheckpointExitCode") is not None
         ))
-        is_over_disk_request = i.get("DiskUsage", 0) > i.get("RequestDisk", 1)
+        is_over_disk_request = i.get("DiskUsage", 0) > f.get("FlooredRequestDisk", 1)
         goodput_time = 0
         if not is_removed:
             goodput_time = int(float(i.get("lastremotewallclockTime", i.get("CommittedTime", 0))))
@@ -166,9 +166,9 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
                 input_bytes += i.get("BytesRecvd", 0)
                 output_bytes += i.get("BytesSent", 0)
         job_units = get_job_units(
-            cpus=i.get("RequestCpus", 1),
-            memory_gb=i.get("RequestMemory", 1024)/1024,
-            disk_gb=i.get("RequestDisk", 1024**2)/1024**2,
+            cpus=f.get("FlooredRequestCpus", 1),
+            memory_gb=f.get("FlooredRequestMemory", 1024)/1024,
+            disk_gb=f.get("FlooredRequestDisk", 1024**2)/1024**2,
         )
         long_job_wallclock_time = int(is_long) * int(float(i.get("lastremotewallclocktime", i.get("CommittedTime", 60))))
 
@@ -185,9 +185,9 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         sum_cols["OverDiskJobs"] = int(is_over_disk_request)
 
         sum_cols["TotalLongJobWallClockTime"] = long_job_wallclock_time
-        sum_cols["GoodCpuTime"] = (goodput_time * max(i.get("RequestCpus", 1), 1))
-        sum_cols["CpuTime"] = (i.get("RemoteWallClockTime", 0) * max(i.get("RequestCpus", 1), 1))
-        sum_cols["BadCpuTime"] = ((i.get("RemoteWallClockTime", 0) - goodput_time) * max(i.get("RequestCpus", 1), 1))
+        sum_cols["GoodCpuTime"] = (goodput_time * max(f.get("FlooredRequestCpus", 1), 1))
+        sum_cols["CpuTime"] = (i.get("RemoteWallClockTime", 0) * max(f.get("FlooredRequestCpus", 1), 1))
+        sum_cols["BadCpuTime"] = ((i.get("RemoteWallClockTime", 0) - goodput_time) * max(f.get("FlooredRequestCpus", 1), 1))
         sum_cols["JobUnitTime"] = job_units * i.get("RemoteWallClockTime", 0)
         sum_cols["NumShadowStarts"] = i.get("NumShadowStarts", 0)
         sum_cols["NumJobStarts"] = i.get("NumJobStarts", 0)
@@ -208,11 +208,11 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
 
         max_cols = {}
         max_cols["MaxLongJobWallClockTime"] = long_job_wallclock_time
-        max_cols["MaxRequestMemory"] = i.get("RequestMemory", 0)
+        max_cols["MaxRequestMemory"] = f.get("FlooredRequestMemory", 0)
         max_cols["MaxMemoryUsage"] = i.get("MemoryUsage", 0)
-        max_cols["MaxRequestDisk"] = i.get("RequestDisk", 0)
+        max_cols["MaxRequestDisk"] = f.get("FlooredRequestDisk", 0)
         max_cols["MaxDiskUsage"] = i.get("DiskUsage", 0)
-        max_cols["MaxRequestCpus"] = i.get("RequestCpus", 1)
+        max_cols["MaxRequestCpus"] = f.get("FlooredRequestCpus", 1)
         max_cols["MaxJobUnits"] = job_units
 
         min_cols = {}
@@ -233,24 +233,30 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Get output dict for this schedd
         schedd = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
         output = data["Schedds"][schedd]
         total = data["Schedds"]["TOTAL"]
 
-        self.reduce_data(i, output, total)
+        self.reduce_data(i, f, output, total)
 
     def user_filter(self, data, doc):
 
         # Get input dict
         i = doc["_source"]
 
+        # Get computed fields (as single values instead of arrays)
+        f = {k: v[0] for k, v in doc.get("fields", {}).items()}
+
         # Get output dict for this user
         user = i.get("User", "UNKNOWN") or "UNKNOWN"
         output = data["Users"][user]
         total = data["Users"]["TOTAL"]
 
-        self.reduce_data(i, output, total)
+        self.reduce_data(i, f, output, total)
 
         counter_cols = {}
         counter_cols["ScheddNames"] = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
