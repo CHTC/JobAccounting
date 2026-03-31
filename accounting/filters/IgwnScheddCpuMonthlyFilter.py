@@ -99,7 +99,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         })
         return query
 
-    def reduce_data(self, i, o, t, is_site=False):
+    def reduce_data(self, i, f, o, t, is_site=False):
 
         is_removed = i.get("JobStatus") == 3
         is_dagnode = i.get("DAGNodeName") is not None
@@ -241,7 +241,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         output = data["Schedds"][schedd]
         total = data["Schedds"]["TOTAL"]
 
-        self.reduce_data(i, output, total)
+        self.reduce_data(i, f, output, total)
 
     def user_filter(self, data, doc):
 
@@ -256,7 +256,7 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         output = data["Users"][user]
         total = data["Users"]["TOTAL"]
 
-        self.reduce_data(i, output, total)
+        self.reduce_data(i, f, output, total)
 
         counter_cols = {}
         counter_cols["ScheddNames"] = i.get("ScheddName", "UNKNOWN") or "UNKNOWN"
