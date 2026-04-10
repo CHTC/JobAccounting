@@ -152,6 +152,31 @@ def get_uwdf_director_servers(cache_file=Path("./uwdf_director_servers.pickle"))
     return uwdf_director_servers
 
 
+def get_osdf_endpoint_location_map() -> dict:
+    """Return a dict mapping OSDF endpoint (host:port) to {"latitude": ..., "longitude": ...}.
+
+    Uses the director server list directly, which has top-level latitude/longitude
+    fields for every server. The endpoint key matches the ES Endpoint field format.
+    """
+    director_servers = get_osdf_director_servers()
+    endpoint_map = {}
+    seen_netlocs = set()
+    for server in director_servers.values():
+        url = server.get("url", "")
+        if not url:
+            continue
+        netloc = url.split("//")[-1]
+        if netloc in seen_netlocs:
+            continue
+        seen_netlocs.add(netloc)
+        lat = server.get("latitude")
+        lon = server.get("longitude")
+        if lat is not None and lon is not None:
+            endpoint_map[netloc] = {"latitude": float(lat), "longitude": float(lon)}
+    return endpoint_map
+
+
+
 def get_institution_database(cache_file=Path("./institution_database.pickle")) -> dict:
     institution_db = {}
 
@@ -230,6 +255,8 @@ def get_topology_project_data(cache_file=Path("./topology_project_data.pickle"))
             "pi": "Unknown",
             "pi_institution": "Unknown",
             "field_of_science": "Unknown",
+            "latitude": 0,
+            "longitude": 0,
         }
     }
 
@@ -241,8 +268,13 @@ def get_topology_project_data(cache_file=Path("./topology_project_data.pickle"))
 
         if project_institution_id in institution_db:
             project_institution = institution_db[project_institution_id]["name"]
+            project_lat = institution_db[project_institution_id].get("latitude", 0)
+            project_lon = institution_db[project_institution_id].get("longitude", 0)
+            project_lat = float(project_lat) if project_lat is not None else 0
+            project_lon = float(project_lon) if project_lon is not None else 0
         else:
             project_institution = project.find("Organization").text
+            project_lat = project_lon = 0
 
         project_map["name"] = project.find("Name").text
         project_map["id"] = project.find("ID").text
@@ -250,6 +282,9 @@ def get_topology_project_data(cache_file=Path("./topology_project_data.pickle"))
         project_map["institution_id"] = project_institution_id
         project_map["field_of_science"] = project.find("FieldOfScience").text
         project_map["field_of_science_id"] = project.find("FieldOfScienceID").text
+        project_map["latitude"] = project_lat
+        project_map["longitude"] = project_lon
+        project_map["state"] = institution_db[project_institution_id].get("state") if project_institution_id in institution_db else None
         projects_data[project_map["name"].lower()] = project_map.copy()
 
     pickle.dump(projects_data, cache_file.open("wb"))
@@ -289,6 +324,8 @@ def get_topology_resource_data(cache_file=Path("./topology_resource_data.pickle"
         "Unknown": {
             "name": "Unknown",
             "institution": "Unknown",
+            "latitude": 0,
+            "longitude": 0,
         }
     }
 
@@ -300,11 +337,19 @@ def get_topology_resource_data(cache_file=Path("./topology_resource_data.pickle"
         resource_institution_id = resource_group.find("Facility").find("InstitutionID").text
         if resource_institution_id in institution_db:
             resource_institution = institution_db[resource_institution_id]["name"]
+            resource_lat = institution_db[resource_institution_id].get("latitude", 0)
+            resource_lon = institution_db[resource_institution_id].get("longitude", 0)
+            resource_lat = float(resource_lat) if resource_lat is not None else 0
+            resource_lon = float(resource_lon) if resource_lon is not None else 0
         else:
             resource_institution = resource_group.find("Facility").find("Name").text
+            resource_lat = resource_lon = 0
 
         resource_map["institution"] = resource_institution
         resource_map["institution_id"] = resource_institution_id
+        resource_map["latitude"] = resource_lat
+        resource_map["longitude"] = resource_lon
+        resource_map["state"] = institution_db[resource_institution_id].get("state") if resource_institution_id in institution_db else None
 
         resource_group_name = resource_group.find("GroupName").text
         resource_map["group_name"] = resource_group_name
