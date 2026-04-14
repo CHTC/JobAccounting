@@ -17,10 +17,20 @@ import importlib.util
 from pathlib import Path
 from datetime import datetime
 
-import shapefile
-import elasticsearch
+try:
+    import shapefile
+except ImportError:
+    shapefile = None
 
-from shapely.geometry import Point, shape
+try:
+    import elasticsearch
+except ImportError:
+    elasticsearch = None
+
+try:
+    from shapely.geometry import Point, shape
+except ImportError:
+    Point = shape = None
 
 try:
     import htcondor2 as htcondor
@@ -76,6 +86,34 @@ OSPOOL_APS = {
     "scott.grid.uchicago.edu",
     "xd-submit0000.chtc.wisc.edu",
     "testbed",
+}
+
+
+EMAIL_ARGS = {
+    "--from": {"dest": "from_addr", "default": "no-reply@chtc.wisc.edu"},
+    "--reply-to": {"default": "jpatton@cs.wisc.edu"},
+    "--to": {"action": "append", "default": []},
+    "--cc": {"action": "append", "default": []},
+    "--bcc": {"action": "append", "default": []},
+    "--admin-to": {"action": "append", "default": []},
+    "--smtp-server": {},
+    "--smtp-username": {},
+    "--smtp-password-file": {"type": Path},
+}
+
+ELASTICSEARCH_ARGS = {
+    "--es-host": {},
+    "--es-url-prefix": {},
+    "--es-index": {},
+    "--es-user": {},
+    "--es-password-file": {"type": Path},
+    "--es-use-https": {"action": "store_true"},
+    "--es-ca-certs": {},
+    "--es-config-file": {
+        "type": Path,
+        "help": "JSON file containing an object that sets above ES options",
+    },
+    "--es-timeout": {"type": int},
 }
 
 
@@ -193,23 +231,26 @@ def get_ospool_aps(include_jupyter_aps: bool = True, pickled_ap_collector_hosts_
     return current_ospool_aps | cached_aps | OSPOOL_APS
 
 
-def print_es_error(d, depth=0, **kwargs):
-    pre = depth*"\t"
+def get_es_error(d, depth=0) -> str:
+    lines = []
+    pre = depth * "\t"
     for k, v in d.items():
-        if k == "failed_shards":
-            print(f"{pre}{k}:", **kwargs)
-            print_es_error(v[0], depth=depth+1, **kwargs)
-        elif k == "root_cause":
-            print(f"{pre}{k}:")
-            print_es_error(v[0], depth=depth+1, **kwargs)
+        if k in ("failed_shards", "root_cause"):
+            lines.append(f"{pre}{k}:")
+            lines.append(get_es_error(v[0], depth=depth+1))
         elif isinstance(v, dict):
-            print(f"{pre}{k}:")
-            print_es_error(v, depth=depth+1, **kwargs)
+            lines.append(f"{pre}{k}:")
+            lines.append(get_es_error(v, depth=depth+1))
         elif isinstance(v, list):
             nt = f"\n{pre}\t"
-            print(f"{pre}{k}:\n{pre}\t{nt.join(v)}", **kwargs)
+            lines.append(f"{pre}{k}:\n{pre}\t{nt.join(str(i) for i in v)}")
         else:
-            print(f"{pre}{k}:\t{v}", **kwargs)
+            lines.append(f"{pre}{k}:\t{v}")
+    return "\n".join(lines)
+
+
+def print_es_error(d, depth=0, **kwargs):
+    print(get_es_error(d, depth), **kwargs)
 
 
 def execute_async(es, query, poll_interval=10):
