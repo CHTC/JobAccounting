@@ -1,6 +1,7 @@
 import csv
 import html
 import json
+import re
 import sys
 import argparse
 import traceback
@@ -329,8 +330,12 @@ def parse_args() -> argparse.Namespace:
         es_args.add_argument(name, **properties)
 
     parser.add_argument("--project", required=True)
-    parser.add_argument("--users", action="store_true")
-    parser.add_argument("--anonymize", action="store_true")
+    parser.add_argument("--use-chtc-projects", action="store_true",
+                        help="Filter on CHTCProjects instead of ProjectName")
+    parser.add_argument("--users", action="store_true",
+                        help="Split usage by username")
+    parser.add_argument("--anonymize", action="store_true",
+                        help="Anonymize usernames")
     parser.add_argument("--start", type=valid_date)
     parser.add_argument("--end", type=valid_date)
     parser.add_argument(
@@ -358,12 +363,17 @@ def get_query(
         start,
         end,
         agg_users=False,
+        use_chtc_projects=False,
         ):
+    if use_chtc_projects:
+        project_filter = Q("regexp", chtcprojects__keyword={"value": f"(.*,)?{re.escape(project)}(,.*)?"})
+    else:
+        project_filter = Q("term", ProjectName__keyword=project)
     query = Search(using=client, index=index) \
             .extra(size=0) \
             .extra(track_scores=False) \
             .extra(track_total_hits=True) \
-            .filter("term", ProjectName__keyword=project) \
+            .filter(project_filter) \
             .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
             .query(~Q("terms", JobUniverse=[7, 12]))
 
@@ -964,6 +974,7 @@ def main():
         start=args.start,
         end=args.end,
         agg_users=args.users,
+        use_chtc_projects=args.use_chtc_projects,
     )
 
     try:
