@@ -9,10 +9,16 @@ RUN micromamba install -y -c conda-forge "python=3.11" "elasticsearch=${ELASTICS
 
 
 USER root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends zip && \
+    rm -rf /var/lib/apt/lists/*
+
 ARG SCRIPT_DIR=/opt/monitoring_scripts
 RUN mkdir -p ${SCRIPT_DIR}/lib
 
 COPY accounting/aggregations/chtc_project_usage.py $SCRIPT_DIR/lib/
 COPY accounting/aggregations/functions.py $SCRIPT_DIR/lib/
+COPY accounting/aggregations/metric_functions.py $SCRIPT_DIR/lib/
+COPY accounting/aggregations/send_chtc_project_usage_report.py $SCRIPT_DIR/lib/
 
 ENV PYTHONPATH=${SCRIPT_DIR}/lib

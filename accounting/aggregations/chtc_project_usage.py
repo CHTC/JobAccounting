@@ -1,42 +1,20 @@
-import sys
+import csv
+import html
 import json
+import re
+import sys
 import argparse
-import importlib
+import traceback
 
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from functions import send_email
+from metric_functions import connect, valid_date, get_es_error, EMAIL_ARGS, ELASTICSEARCH_ARGS
 
-import elasticsearch
 from elasticsearch_dsl import Search, A, Q
 
 
-EMAIL_ARGS = {
-    "--from": {"dest": "from_addr", "default": "no-reply@chtc.wisc.edu"},
-    "--reply-to": {"default": "jpatton@cs.wisc.edu"},
-    "--to": {"action": "append", "default": []},
-    "--cc": {"action": "append", "default": []},
-    "--bcc": {"action": "append", "default": []},
-    "--smtp-server": {},
-    "--smtp-username": {},
-    "--smtp-password-file": {"type": Path}
-}
-
-ELASTICSEARCH_ARGS = {
-    "--es-host": {},
-    "--es-url-prefix": {},
-    "--es-index": {},
-    "--es-user": {},
-    "--es-password-file": {"type": Path},
-    "--es-use-https": {"action": "store_true"},
-    "--es-ca-certs": {},
-    "--es-config-file": {
-        "type": Path,
-        "help": "JSON file containing an object that sets above ES options",
-    },
-    "--es-timeout": {"type": int},
-}
 
 NUMERIC_TD_STYLE = "border: 1px solid black; text-align: right"
 TEXT_TD_STYLE = "border: 1px solid black; text-align: left"
@@ -45,7 +23,7 @@ DEFAULT_COLUMNS = {
      5: "User",
     10: "Num Uniq Job Ids",
     20: "All CPU Hours",
-    30: r"% Good CPU Hours",
+    30: "% Good CPU Hours",
     35: "Job Unit Hours",
 
     45: "% Ckpt Able",
@@ -102,17 +80,6 @@ DEFAULT_COLUMNS = {
     540: "Med Job Units",
     545: "Max Job Units",
 }
-
-# PROJECT_NAME_NORMALIZE_SRC = r"""
-# String project = "UNKNOWN";
-# for (key in ["ProjectName", "Projectname", "projectname"]) {
-#   if (doc.containsKey(key) && doc[key + ".keyword"].size() > 0) {
-#     project = doc[key + ".keyword"].value;
-#     break;
-#   }
-# }
-# emit(project);
-# """
 
 RESOURCE_TYPES = ["Cpus", "Memory", "Disk", "Gpus"]
 DEFAULT_RESOURCE_VALUE = {
@@ -351,13 +318,6 @@ emit(files);
 """
 
 
-def valid_date(date_str: str) -> datetime:
-    try:
-        return datetime.strptime(date_str, "%Y-%m-%d")
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"Invalid date string, should match format YYYY-MM-DD: {date_str}")
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
@@ -370,63 +330,30 @@ def parse_args() -> argparse.Namespace:
         es_args.add_argument(name, **properties)
 
     parser.add_argument("--project", required=True)
-    parser.add_argument("--users", action="store_true")
-    parser.add_argument("--anonymize", action="store_true")
+    parser.add_argument("--use-chtc-projects", action="store_true",
+                        help="Filter on CHTCProjects instead of ProjectName")
+    parser.add_argument("--users", action="store_true",
+                        help="Split usage by username")
+    parser.add_argument("--anonymize", action="store_true",
+                        help="Anonymize usernames")
     parser.add_argument("--start", type=valid_date)
     parser.add_argument("--end", type=valid_date)
+    parser.add_argument(
+        "--csv-file",
+        nargs="?",
+        const="",
+        type=Path,
+        help="Write output to a CSV file. If no path is given, writes to the current directory with an auto-generated name.",
+    )
+    parser.add_argument(
+        "--html-file",
+        nargs="?",
+        const="",
+        type=Path,
+        help="Write HTML report to a file. If no path is given, writes to the current directory with an auto-generated name.",
+    )
 
     return parser.parse_args()
-
-
-def connect(
-        es_host="localhost:9200",
-        es_user="",
-        es_pass="",
-        es_use_https=False,
-        es_ca_certs=None,
-        es_url_prefix=None,
-        **kwargs,
-    ) -> elasticsearch.Elasticsearch:
-    # Returns Elasticsearch client
-
-    # Split off port from host if included
-    if ":" in es_host and len(es_host.split(":")) == 2:
-        [es_host, es_port] = es_host.split(":")
-        es_port = int(es_port)
-    elif ":" in es_host:
-        print(f"Ambiguous hostname:port in given host: {es_host}")
-        sys.exit(1)
-    else:
-        es_port = 9200
-    es_client = {
-        "host": es_host,
-        "port": es_port
-    }
-
-    # Include username and password if both are provided
-    if (not es_user) ^ (not es_pass):
-        print("Only one of es_user and es_pass have been defined")
-        print("Connecting to Elasticsearch anonymously")
-    elif es_user and es_pass:
-        es_client["http_auth"] = (es_user, es_pass)
-
-    if es_url_prefix:
-        es_client["url_prefix"] = es_url_prefix
-
-    # Only use HTTPS if CA certs are given or if certifi is available
-    if es_use_https:
-        if es_ca_certs is not None:
-            es_client["ca_certs"] = str(es_ca_certs)
-        elif importlib.util.find_spec("certifi") is not None:
-            pass
-        else:
-            print("Using HTTPS with Elasticsearch requires that either es_ca_certs be provided or certifi library be installed")
-            sys.exit(1)
-        es_client["use_ssl"] = True
-        es_client["verify_certs"] = True
-        es_client.update(kwargs)
-
-    return elasticsearch.Elasticsearch([es_client], **kwargs)
 
 
 def get_query(
@@ -436,12 +363,17 @@ def get_query(
         start,
         end,
         agg_users=False,
+        use_chtc_projects=False,
         ):
+    if use_chtc_projects:
+        project_filter = Q("regexp", chtcprojects__keyword={"value": f"(.*,)?{re.escape(project)}(,.*)?"})
+    else:
+        project_filter = Q("term", ProjectName__keyword=project)
     query = Search(using=client, index=index) \
             .extra(size=0) \
             .extra(track_scores=False) \
             .extra(track_total_hits=True) \
-            .filter("term", ProjectName__keyword=project) \
+            .filter(project_filter) \
             .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
             .query(~Q("terms", JobUniverse=[7, 12]))
 
@@ -764,25 +696,6 @@ def get_query(
     return query
 
 
-def print_error(d, depth=0):
-    pre = depth*"\t"
-    for k, v in d.items():
-        if k == "failed_shards":
-            print(f"{pre}{k}:")
-            print_error(v[0], depth=depth+1)
-        elif k == "root_cause":
-            print(f"{pre}{k}:")
-            print_error(v[0], depth=depth+1)
-        elif isinstance(v, dict):
-            print(f"{pre}{k}:")
-            print_error(v, depth=depth+1)
-        elif isinstance(v, list):
-            nt = f"\n{pre}\t"
-            print(f"{pre}{k}:\n{pre}\t{nt.join(v)}")
-        else:
-            print(f"{pre}{k}:\t{v}")
-
-
 def summarize_results(res, user: str) -> dict:
     o = {}
     if user == "TOTAL":
@@ -798,7 +711,7 @@ def summarize_results(res, user: str) -> dict:
     o["User"] = user
     o["Num Uniq Job Ids"] = jobs
     o["All CPU Hours"] = a.cpu_hours.value
-    o[r"% Good CPU Hours"] = 100 * (a.good_cpu_hours.value / a.cpu_hours.value) if a.cpu_hours.value > 0 else 0
+    o["% Good CPU Hours"] = 100 * (a.good_cpu_hours.value / a.cpu_hours.value) if a.cpu_hours.value > 0 else 0
     o["Job Unit Hours"] = a.job_unit_hours.value
     o["% Ckpt Able"] = 100 * (a.ckptable_jobs.doc_count / jobs)
     o["% Rm'd Jobs"] = 100 * (a.rm_jobs.doc_count / jobs)
@@ -914,12 +827,12 @@ def get_html(summary: dict, sort_col="Num Uniq Job Ids") -> str:
         custom_items = {}
         custom_items["Num Uniq Job Ids"] = "Number of unique job ids across all execution attempts"
         custom_items["All CPU Hours"]    = "Total CPU hours for all execution attempts, including preemption and removal"
-        custom_items[r"% Good CPU Hours"] = "Good CPU Hours per All CPU Hours, as a percentage"
+        custom_items["% Good CPU Hours"] = "Good CPU Hours per All CPU Hours, as a percentage"
         custom_items["Good CPU Hours"]   = "Total CPU hours for execution attempts that ran to completion"
         custom_items["Job Units"]        = "The minimum number of base job units required to satisfy a job's resource requirements. The base job unit is 1 CPU, 4 GB memory, and 4 GB disk"
         custom_items["Job Unit Hours"]   = """Job units multiplied by total wallclock hours, like "All CPU Hours" but using "Job Units" instead of CPUs"""
         custom_items["Med Job Units"]    = "Median number of job units requested by the submitted jobs"
-        custom_items["Med Job Units"]    = "Maximum number of job units requested by a submitted job"
+        custom_items["Max Job Units"]    = "Maximum number of job units requested by a submitted job"
         custom_items["Max Rqst Mem MB"]  = "Maximum memory requested across all submitted jobs in MB"
         custom_items["Max Used Mem MB"]  = "Maximum measured memory usage across all submitted jobs' last execution attempts in MB"
         custom_items["Max Rqst Cpus"]    = "Maximum number of CPUs requested across all submitted jobs"
@@ -1005,6 +918,31 @@ def get_html(summary: dict, sort_col="Num Uniq Job Ids") -> str:
     return "".join(html)
 
 
+def get_rows(summary: dict) -> list:
+    rows = [summary["TOTAL"]]
+    rows += [
+        summary[user]
+        for _, user in sorted(
+            [(s.get("Num Uniq Job Ids", 0), s["User"]) for s in summary.values() if s["User"] != "TOTAL"],
+            reverse=True,
+        )
+    ]
+    return rows
+
+
+def write_csv(summary: dict, csv_path: Path):
+    if summary["TOTAL"]:
+        cols = [col for _, col in sorted(DEFAULT_COLUMNS.items()) if col in summary["TOTAL"]]
+        rows = get_rows(summary)
+    else:
+        cols = [col for _, col in sorted(DEFAULT_COLUMNS.items())]
+        rows = []
+    with csv_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore", restval="")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main():
     args = parse_args()
     es_args = {}
@@ -1021,10 +959,11 @@ def main():
     if args.end is None:
         args.end = args.start + timedelta(days=1)
     days = (args.end - args.start).days
+    email_subject = f"{days}-day CHTC Usage Report for {args.project} starting {args.start.strftime(r'%Y-%m-%d')}"
 
-    es_args["timeout"] = es_args.pop("es_timeout", None)
-    if not es_args["timeout"]:
-        es_args["timeout"] = 60 + int(10 * (days**0.75))
+    if not es_args.get("es_timeout"):
+        es_args["es_timeout"] = 60 + int(10 * (days**0.75))
+
     es = connect(**es_args)
     es.info()
 
@@ -1035,16 +974,31 @@ def main():
         start=args.start,
         end=args.end,
         agg_users=args.users,
+        use_chtc_projects=args.use_chtc_projects,
     )
 
     try:
         result = query.execute()
     except Exception as err:
+        error_str = None
         try:
-            print_error(err.info)
+            error_str = get_es_error(err.info)
         except Exception:
             pass
-        raise err
+        if not error_str:
+            error_str = traceback.format_exc()
+        print(error_str, file=sys.stderr)
+        if args.admin_to:
+            send_email(
+                subject=f"Error in {email_subject}",
+                from_addr=args.from_addr,
+                to_addrs=args.admin_to,
+                html=f"<html><body><pre>{html.escape(error_str)}</pre></body></html>",
+                smtp_server=args.smtp_server,
+                smtp_username=args.smtp_username,
+                smtp_password_file=args.smtp_password_file,
+            )
+        raise
 
     summary = {}
     summary["TOTAL"] = summarize_results(result, "TOTAL")
@@ -1055,20 +1009,45 @@ def main():
                 if args.anonymize:
                     user = f"user{i_user}"
                 summary[user] = summarize_results(bucket, user)
-        html = get_html(summary)
+        rows = get_rows(summary)
+        print("[\n" + ",\n".join("  " + json.dumps(row) for row in rows) + "\n]")
+        html_body = get_html(summary) if (args.to or args.html_file is not None) else None
+        if args.html_file is not None:
+            if args.html_file == "":
+                html_path = Path(f"{args.project}_{args.start.strftime('%Y-%m-%d')}_{args.end.strftime('%Y-%m-%d')}.html")
+            else:
+                html_path = args.html_file
+            html_path.write_text(html_body)
     else:
-        html = f"<html><body>No usage found during the reporting period</body></html>"
-    print(html)
+        print("Warning: No usage found during the reporting period.")
+        html_body = "<html><body>No usage found during the reporting period</body></html>"
+        if args.admin_to:
+            send_email(
+                subject=f"No usage found in {email_subject}",
+                from_addr=args.from_addr,
+                to_addrs=args.admin_to,
+                html=f"<html><body><p>No usage found during the reporting period.</p>"
+                     f"<p>Script called with: <pre>{html.escape(' '.join(sys.argv))}</pre></p></body></html>",
+                smtp_server=args.smtp_server,
+                smtp_username=args.smtp_username,
+                smtp_password_file=args.smtp_password_file,
+            )
+
+    if args.csv_file is not None:
+        if args.csv_file == "":
+            csv_path = Path(f"{args.project}_{args.start.strftime('%Y-%m-%d')}_{args.end.strftime('%Y-%m-%d')}.csv")
+        else:
+            csv_path = args.csv_file
+        write_csv(summary, csv_path)
 
     if args.to:  # only send email if at least one To: address is specified
-        subject = f"{days}-day CHTC Usage Report for {args.project} starting {args.start.strftime(r'%Y-%m-%d')}"
         send_email(
-            subject=subject,
+            subject=email_subject,
             from_addr=args.from_addr,
             to_addrs=args.to,
-            html=html,
+            html=html_body,
             cc_addrs=args.cc,
-            bcc_addrs=args.cc,
+            bcc_addrs=args.bcc,
             reply_to_addr=args.reply_to,
             smtp_server=args.smtp_server,
             smtp_username=args.smtp_username,
