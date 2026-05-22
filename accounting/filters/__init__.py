@@ -17,5 +17,6 @@ from .ChtcScheddCpuMonthlyFilter import ChtcScheddCpuMonthlyFilter
 from .ChtcScheddCpuOspoolMonthlyFilter import ChtcScheddCpuOspoolMonthlyFilter
 from .ChtcScheddJobDistroFilter import ChtcScheddJobDistroFilter
 from .PathScheddCpuFilter import PathScheddCpuFilter
+from .PathScheddGpuFilter import PathScheddGpuFilter
 from .IgwnScheddCpuFilter import IgwnScheddCpuFilter
 from .IgwnScheddCpuMonthlyFilter import IgwnScheddCpuMonthlyFilter

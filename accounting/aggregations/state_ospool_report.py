@@ -221,6 +221,7 @@ def get_base_query(
 
     resource_name_agg = A("terms", field="ResourceName", size=512)
     resource_name_agg.metric("cpu_hours", cpu_hours_agg)
+    resource_name_agg.metric("unique_owners", A("cardinality", field="Owner.keyword"))
     for name, agg in osdf_transfer_aggs_lastrun.items():
         resource_name_agg.metric(name, agg)
     resource_name_agg.pipeline("osdf_files_transferred", files_total_agg)
@@ -229,6 +230,7 @@ def get_base_query(
 
     project_name_agg = A("terms", field="ProjectNameLower", size=512)
     project_name_agg.metric("cpu_hours", cpu_hours_agg)
+    project_name_agg.metric("unique_owners", A("cardinality", field="Owner.keyword"))
     for name, agg in osdf_transfer_aggs_total.items():
         project_name_agg.metric(name, agg)
     project_name_agg.pipeline("osdf_files_transferred", files_total_agg)
@@ -238,6 +240,7 @@ def get_base_query(
     # state_resources: jobs that ran on a state-based resource, broken down by resource name.
     state_resource_filter = A("filter", Q("terms", ResourceName=list(state_resources)))
     state_resource_filter.bucket("resource_name", resource_name_agg)
+    state_resource_filter.metric("unique_owners", A("cardinality", field="Owner.keyword"))
 
     # state_projects: jobs from state-based projects, broken down by project name.
     # Sub-bucket "owners" collects unique job owners across all state projects, which
@@ -245,6 +248,7 @@ def get_base_query(
     state_project_filter = A("filter", Q("terms", ProjectNameLower=list(state_projects)))
     state_project_filter.bucket("project_name", project_name_agg)
     state_project_filter.bucket("owners", A("terms", field="Owner.keyword", size=512))
+    state_project_filter.metric("unique_owners", A("cardinality", field="Owner.keyword"))
 
     query.aggs.bucket("state_resources", state_resource_filter)
     query.aggs.bucket("state_projects", state_project_filter)
@@ -280,9 +284,17 @@ def get_state_institutions(state: str) -> set[str]:
     }
 
 
-def print_table(buckets, topology_data, name_column: str, sub_bucket_key: str, cross_topology_data: dict, cross_column: str, debug: bool = False):
+def print_table(buckets, topology_data, name_column: str, sub_bucket_key: str, cross_topology_data: dict, cross_column: str, totals: dict = None, debug: bool = False):
     writer = csv.writer(sys.stdout)
-    writer.writerow([name_column, "Institution", "Total Jobs", "CPU Hours", "OSDF Objects Transferred", "OSDF GB Transferred", cross_column, f"{cross_column} Institutions"])
+    has_unique_owners = buckets and "unique_owners" in buckets[0]
+    header = [name_column, "Institution", "Total Jobs", "CPU Hours", "OSDF Objects Transferred", "OSDF GB Transferred", cross_column, f"{cross_column} Institutions"]
+    if has_unique_owners:
+        header.append("Unique Users")
+    writer.writerow(header)
+
+    all_cross_keys = set()
+    all_cross_institutions = set()
+
     for bucket in buckets:
         key = bucket["key"]
         if "_iid_" in key:
@@ -305,10 +317,12 @@ def print_table(buckets, topology_data, name_column: str, sub_bucket_key: str, c
                 inst = cross_topology_data.get(b_key, {}).get("institution", "")
             if inst:
                 cross_institutions.add(inst)
+            all_cross_keys.add(b_key)
+        all_cross_institutions.update(cross_institutions)
 
         if debug:
             print(f"{display_name} {cross_column} institutions: {cross_institutions}", file=sys.stderr)
-        writer.writerow([
+        row = [
             display_name,
             institution_name,
             bucket["doc_count"],
@@ -317,7 +331,16 @@ def print_table(buckets, topology_data, name_column: str, sub_bucket_key: str, c
             round(bucket["osdf_bytes_transferred"]["value"] / 1e9, 2),
             cross_count,
             len(cross_institutions),
-        ])
+        ]
+        if has_unique_owners:
+            row.append(bucket["unique_owners"]["value"])
+        writer.writerow(row)
+
+    if totals is not None:
+        row = ["Total", "", "", "", "", "", len(all_cross_keys), len(all_cross_institutions)]
+        if has_unique_owners:
+            row.append(totals["unique_owners"]["value"])
+        writer.writerow(row)
 
 
 def main():
@@ -362,9 +385,9 @@ def main():
         cache_file.write_text(json.dumps(result))
         print(f"Results cached to {cache_file}", file=sys.stderr)
 
-    print_table(result["aggregations"]["state_resources"]["resource_name"]["buckets"], RESOURCE_TOPOLOGY_DATA, "Resource", "project_names", PROJECT_TOPOLOGY_DATA, "Projects", debug=args.debug)
+    print_table(result["aggregations"]["state_resources"]["resource_name"]["buckets"], RESOURCE_TOPOLOGY_DATA, "Resource", "project_names", PROJECT_TOPOLOGY_DATA, "Projects", totals=result["aggregations"]["state_resources"], debug=args.debug)
     print()
-    print_table(result["aggregations"]["state_projects"]["project_name"]["buckets"], PROJECT_TOPOLOGY_DATA, "Project", "resource_names", RESOURCE_TOPOLOGY_DATA, "Resources", debug=args.debug)
+    print_table(result["aggregations"]["state_projects"]["project_name"]["buckets"], PROJECT_TOPOLOGY_DATA, "Project", "resource_names", RESOURCE_TOPOLOGY_DATA, "Resources", totals=result["aggregations"]["state_projects"], debug=args.debug)
 
 
 if __name__ == "__main__":

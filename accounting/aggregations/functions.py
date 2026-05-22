@@ -42,6 +42,7 @@ OSPOOL_APS = {
     "ap40.uw.osg-htc.org",
     "ap41.uw.osg-htc.org",
     "ap42.uw.osg-htc.org",
+    "ap43.uw.osg-htc.org",
     "ap7.chtc.wisc.edu",
     "ap7.chtc.wisc.edu@ap2007.chtc.wisc.edu",
     "ce1.opensciencegrid.org",

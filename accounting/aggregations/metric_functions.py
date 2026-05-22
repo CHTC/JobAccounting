@@ -124,6 +124,15 @@ def valid_date(date_str: str) -> datetime:
         raise argparse.ArgumentTypeError(f"Invalid date string, should match format YYYY-MM-DD: {date_str}")
 
 
+def valid_datetime(datetime_str: str) -> datetime:
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(datetime_str, fmt)
+        except ValueError:
+            pass
+    raise argparse.ArgumentTypeError(f"Invalid datetime string, should match format YYYY-MM-DDTHH:MM or YYYY-MM-DD: {datetime_str}")
+
+
 def connect(
         es_host="localhost:9200",
         es_user="",
@@ -208,6 +217,7 @@ def get_ospool_aps(include_jupyter_aps: bool = True, pickled_ap_collector_hosts_
     if htcondor is None:
         print("Could not import htcondor, not querying APs")
     else:
+        htcondor.param["QUERY_TIMEOUT"] = 10  # timeout quickly, no reason to wait around
         for collector_host in OSPOOL_COLLECTORS:
             try:
                 collector = htcondor.Collector(collector_host)
