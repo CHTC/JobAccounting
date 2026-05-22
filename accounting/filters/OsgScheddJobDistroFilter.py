@@ -65,30 +65,26 @@ class OsgScheddJobDistroFilter(BaseFilter):
         # (Dict has same structure as the REST API query language)
         query = super().get_query(index, start_ts, end_ts, **kwargs)
 
-        query.update({
-            "body": {
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {"range": {
-                                "RecordTime": {
-                                    "gte": start_ts,
-                                    "lt": end_ts,
-                                }
-                            }},
-                            {"terms": {
-                                "ScheddName.keyword": list(OSG_CONNECT_APS)
-                            }},
-                        ],
-                        "must_not": [
-                            {"terms": {
-                                "JobUniverse": [7, 12]
-                            }},
-                        ],
-                    }
-                }
+        query["body"]["query"] = {
+            "bool": {
+                "filter": [
+                    {"range": {
+                        "RecordTime": {
+                            "gte": start_ts,
+                            "lt": end_ts,
+                        }
+                    }},
+                    {"terms": {
+                        "ScheddName.keyword": list(OSG_CONNECT_APS)
+                    }},
+                ],
+                "must_not": [
+                    {"terms": {
+                        "JobUniverse": [7, 12]
+                    }},
+                ],
             }
-        })
+        }
         return query
 
 

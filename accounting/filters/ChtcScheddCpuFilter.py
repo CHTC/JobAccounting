@@ -114,30 +114,26 @@ class ChtcScheddCpuFilter(BaseFilter):
         # (Dict has same structure as the REST API query language)
         query = super().get_query(index, start_ts, end_ts, **kwargs)
 
-        query.update({
-            "body": {
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {"range": {
-                                "RecordTime": {
-                                   "gte": start_ts,
-                                    "lt": end_ts,
-                                }
-                            }},
-                            {"regexp": {
-                                "ScheddName.keyword": ".*[.]chtc[.]wisc[.]edu"
-                            }}
-                        ],
-                        "must_not": [
-                            {"terms": {
-                                "JobUniverse": [7, 12]
-                            }},
-                        ],
-                    }
-                }
+        query["body"]["query"] = {
+            "bool": {
+                "filter": [
+                    {"range": {
+                        "RecordTime": {
+                           "gte": start_ts,
+                            "lt": end_ts,
+                        }
+                    }},
+                    {"regexp": {
+                        "ScheddName.keyword": ".*[.]chtc[.]wisc[.]edu"
+                    }}
+                ],
+                "must_not": [
+                    {"terms": {
+                        "JobUniverse": [7, 12]
+                    }},
+                ],
             }
-        })
+        }
         return query
 
     def schedd_filter(self, data, doc):

@@ -73,30 +73,26 @@ class IgwnScheddCpuMonthlyFilter(BaseFilter):
         # (Dict has same structure as the REST API query language)
         query = super().get_query(index, start_ts, end_ts, **kwargs)
 
-        query.update({
-            "body": {
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {"range": {
-                                "RecordTime": {
-                                   "gte": start_ts,
-                                    "lt": end_ts,
-                                }
-                            }},
-                        ],
-                        "must_not": [
-                            {"term": {
-                                "MATCH_EXP_JOB_GLIDEIN_Site.keyword": "Unknown"
-                            }},
-                            {"terms": {
-                                "JobUniverse": [7, 12]
-                            }},
-                        ],
-                    }
-                }
+        query["body"]["query"] = {
+            "bool": {
+                "filter": [
+                    {"range": {
+                        "RecordTime": {
+                           "gte": start_ts,
+                            "lt": end_ts,
+                        }
+                    }},
+                ],
+                "must_not": [
+                    {"term": {
+                        "MATCH_EXP_JOB_GLIDEIN_Site.keyword": "Unknown"
+                    }},
+                    {"terms": {
+                        "JobUniverse": [7, 12]
+                    }},
+                ],
             }
-        })
+        }
         return query
 
     def reduce_data(self, i, f, o, t, is_site=False):

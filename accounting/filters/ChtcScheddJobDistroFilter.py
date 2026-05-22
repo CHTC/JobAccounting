@@ -53,30 +53,26 @@ class ChtcScheddJobDistroFilter(BaseFilter):
         # (Dict has same structure as the REST API query language)
         query = super().get_query(index, start_ts, end_ts, **kwargs)
 
-        query.update({
-            "body": {
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {"range": {
-                                "RecordTime": {
-                                    "gte": start_ts,
-                                    "lt": end_ts,
-                                }
-                            }},
-                            {"term": {
-                                "JobUniverse": {
-                                    "value": 5,
-                                }
-                            }},
-                            {"terms": {
-                                "ScheddName.keyword": list(CHTC_APS)
-                            }},
-                        ]
-                    }
-                }
+        query["body"]["query"] = {
+            "bool": {
+                "filter": [
+                    {"range": {
+                        "RecordTime": {
+                            "gte": start_ts,
+                            "lt": end_ts,
+                        }
+                    }},
+                    {"term": {
+                        "JobUniverse": {
+                            "value": 5,
+                        }
+                    }},
+                    {"terms": {
+                        "ScheddName.keyword": list(CHTC_APS)
+                    }},
+                ]
             }
-        })
+        }
         return query
 
 

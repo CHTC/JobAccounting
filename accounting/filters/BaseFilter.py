@@ -127,8 +127,8 @@ class BaseFilter:
                     "source": FLOORED_RESOURCE_SCRIPT.format(resource=resource)
                 }
             }
-        query["fields"] = fields
-        query["runtime_mappings"] = runtime_mappings
+        query["body"]["fields"] = fields
+        query["body"]["runtime_mappings"] = runtime_mappings
         return query
 
     def user_filter(self, data, doc):
