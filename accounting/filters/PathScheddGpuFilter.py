@@ -4,6 +4,7 @@ from .BaseFilter import BaseFilter
 
 
 DEFAULT_COLUMNS = {
+     9: "All GPU Hours",
     10: "All CPU Hours",
     20: "Num Uniq Job Ids",
     30: "% Good CPU Hours",
