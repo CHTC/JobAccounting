@@ -142,7 +142,7 @@ def get_query(
                 .extra(size=0) \
                 .extra(track_scores=False) \
                 .extra(track_total_hits=True) \
-                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("range", RemoteWallClockTime={"gt": 0}) \
                 .query(~Q("terms", JobUniverse=[7, 12]))
 

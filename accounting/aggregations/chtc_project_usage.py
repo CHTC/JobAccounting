@@ -22,8 +22,11 @@ TEXT_TD_STYLE = "border: 1px solid black; text-align: left"
 DEFAULT_COLUMNS = {
      5: "User",
     10: "Num Uniq Job Ids",
+    15: "Num GPU Job Ids",
     20: "All CPU Hours",
+    25: "All GPU Hours",
     30: "% Good CPU Hours",
+    33: "% Good GPU Hours",
     35: "Job Unit Hours",
 
     45: "% Ckpt Able",
@@ -330,6 +333,8 @@ def parse_args() -> argparse.Namespace:
         es_args.add_argument(name, **properties)
 
     parser.add_argument("--project", required=True)
+    parser.add_argument("--gpu", action="store_true",
+                        help="Include All GPU Hours and %% Good GPU Hours columns")
     parser.add_argument("--use-chtc-projects", action="store_true",
                         help="Filter on CHTCProjects instead of ProjectName")
     parser.add_argument("--users", action="store_true",
@@ -364,6 +369,7 @@ def get_query(
         end,
         agg_users=False,
         use_chtc_projects=False,
+        gpu=False,
         ):
     if use_chtc_projects:
         project_filter = Q("regexp", chtcprojects__keyword={"value": f"(.*,)?{re.escape(project)}(,.*)?"})
@@ -374,7 +380,7 @@ def get_query(
             .extra(track_scores=False) \
             .extra(track_total_hits=True) \
             .filter(project_filter) \
-            .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+            .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
             .query(~Q("terms", JobUniverse=[7, 12]))
 
     runtime_mappings = {
@@ -499,6 +505,31 @@ def get_query(
         }
     )
     metric_aggs["good_cpu_hours"] = good_cpu_hours_agg
+
+    if gpu:
+        gpu_jobs_agg = A(
+            "filter",
+            Q("range", RequestGpus={"gt": 0}),
+        )
+        metric_aggs["gpu_jobs"] = gpu_jobs_agg
+
+        gpu_hours_agg = A(
+            "sum",
+            script={
+                "lang": "painless",
+                "inline": "doc['FlooredRequestGpus'].value * (doc['RemoteWallClockTime'].value / 3600.0)"
+            }
+        )
+        metric_aggs["gpu_hours"] = gpu_hours_agg
+
+        good_gpu_hours_agg = A(
+            "sum",
+            script={
+                "lang": "painless",
+                "inline": "doc['FlooredRequestGpus'].value * (doc['CommittedTime'].value / 3600.0)"
+            }
+        )
+        metric_aggs["good_gpu_hours"] = good_gpu_hours_agg
 
     job_unit_hours_agg = A(
         "sum",
@@ -696,7 +727,7 @@ def get_query(
     return query
 
 
-def summarize_results(res, user: str) -> dict:
+def summarize_results(res, user: str, gpu=False) -> dict:
     o = {}
     if user == "TOTAL":
         jobs = res.hits.total.value
@@ -712,6 +743,10 @@ def summarize_results(res, user: str) -> dict:
     o["Num Uniq Job Ids"] = jobs
     o["All CPU Hours"] = a.cpu_hours.value
     o["% Good CPU Hours"] = 100 * (a.good_cpu_hours.value / a.cpu_hours.value) if a.cpu_hours.value > 0 else 0
+    if gpu:
+        o["Num GPU Job Ids"] = a.gpu_jobs.doc_count
+        o["All GPU Hours"] = a.gpu_hours.value
+        o["% Good GPU Hours"] = 100 * (a.good_gpu_hours.value / a.gpu_hours.value) if a.gpu_hours.value > 0 else 0
     o["Job Unit Hours"] = a.job_unit_hours.value
     o["% Ckpt Able"] = 100 * (a.ckptable_jobs.doc_count / jobs)
     o["% Rm'd Jobs"] = 100 * (a.rm_jobs.doc_count / jobs)
@@ -799,6 +834,7 @@ def get_html(summary: dict, sort_col="Num Uniq Job Ids") -> str:
             "Std Hrs":    hhmm,
             "Mean Actv Hrs": hhmm,
             "CPU Hours / Bad Exec Att": lambda x: num(x, dtype=float, fmt=".1f"),
+            "% Good GPU Hours":         lambda x: num(x, dtype=float, fmt=".1f"),
             "Shadw Starts / Job Id":    lambda x: num(x, dtype=float, fmt=".2f"),
             "Exec Atts / Shadw Start":  lambda x: num(x, dtype=float, fmt=".3f"),
             "Holds / Job Id":           lambda x: num(x, dtype=float, fmt=".2f"),
@@ -827,7 +863,9 @@ def get_html(summary: dict, sort_col="Num Uniq Job Ids") -> str:
         custom_items = {}
         custom_items["Num Uniq Job Ids"] = "Number of unique job ids across all execution attempts"
         custom_items["All CPU Hours"]    = "Total CPU hours for all execution attempts, including preemption and removal"
+        custom_items["All GPU Hours"]    = "Total GPU hours for all execution attempts, including preemption and removal"
         custom_items["% Good CPU Hours"] = "Good CPU Hours per All CPU Hours, as a percentage"
+        custom_items["% Good GPU Hours"] = "Good GPU Hours per All GPU Hours, as a percentage"
         custom_items["Good CPU Hours"]   = "Total CPU hours for execution attempts that ran to completion"
         custom_items["Job Units"]        = "The minimum number of base job units required to satisfy a job's resource requirements. The base job unit is 1 CPU, 4 GB memory, and 4 GB disk"
         custom_items["Job Unit Hours"]   = """Job units multiplied by total wallclock hours, like "All CPU Hours" but using "Job Units" instead of CPUs"""
@@ -975,6 +1013,7 @@ def main():
         end=args.end,
         agg_users=args.users,
         use_chtc_projects=args.use_chtc_projects,
+        gpu=args.gpu,
     )
 
     try:
@@ -1001,14 +1040,14 @@ def main():
         raise
 
     summary = {}
-    summary["TOTAL"] = summarize_results(result, "TOTAL")
+    summary["TOTAL"] = summarize_results(result, "TOTAL", gpu=args.gpu)
     if summary["TOTAL"]:
         if args.users:
             for i_user, bucket in enumerate(result.aggregations.users.buckets):
                 user = bucket["key"]
                 if args.anonymize:
                     user = f"user{i_user}"
-                summary[user] = summarize_results(bucket, user)
+                summary[user] = summarize_results(bucket, user, gpu=args.gpu)
         rows = get_rows(summary)
         print("[\n" + ",\n".join("  " + json.dumps(row) for row in rows) + "\n]")
         html_body = get_html(summary) if (args.to or args.html_file is not None) else None

@@ -141,7 +141,7 @@ def get_base_query(
                 .extra(size=0, track_scores=False, track_total_hits=True) \
                 .extra(runtime_mappings=runtime_mappings) \
                 .filter("terms", TransferProtocol=["osdf", "stash", "pelican"]) \
-                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("term", TransferSuccess=True)
 
     transfer_total_bytes_agg = A("sum", field="TransferTotalBytes")

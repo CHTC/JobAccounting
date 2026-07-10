@@ -208,6 +208,7 @@ def get_ospool_aps(include_jupyter_aps: bool = True, pickled_ap_collector_hosts_
     if htcondor is None:
         print("Could not import htcondor, not querying APs")
     else:
+        htcondor.param["QUERY_TIMEOUT"] = "10"  # timeout quickly, no reason to wait around
         for collector_host in OSPOOL_COLLECTORS:
             try:
                 collector = htcondor.Collector(collector_host)

@@ -185,7 +185,7 @@ def get_endpoint_types(
                 .extra(track_scores=False) \
                 .extra(track_total_hits=True) \
                 .filter("terms", TransferProtocol=["osdf", "pelican"]) \
-                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
@@ -241,7 +241,7 @@ def get_endpoint_query(
                 .extra(track_scores=False) \
                 .extra(track_total_hits=True) \
                 .filter("terms", TransferProtocol=["osdf", "pelican"]) \
-                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("exists", field="Endpoint") \
                 .query(~Q("term", Endpoint=""))
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
@@ -278,7 +278,7 @@ def get_plugin_attempt_query(
                 .extra(track_scores=False) \
                 .extra(track_total_hits=True) \
                 .filter("terms", TransferProtocol=["osdf", "pelican"]) \
-                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("term", FinalAttempt=True)
     if start > datetime(2025, 4, 18):  # added indexing to TransferUrl after 2025-04-18
         query = query.query(Q("wildcard", TransferUrl__indexed="*osdf://*") | Q("wildcard", TransferUrl__indexed="*pelican://osg-htc.org*"))

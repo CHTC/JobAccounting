@@ -68,7 +68,7 @@ def run_query(client: elasticsearch.Elasticsearch, es_opts: dict, args: argparse
     # nicely the Q object supports ~ for negation :)
     # 'search' is aggregated by project
     search = Search(using=client, index=es_opts["es_index"]) \
-                    .filter("range", RecordTime={"gte" : args.start.timestamp(), "lt" : args.end.timestamp()}) \
+                    .filter("range", RecordTime={"gte" : args.start.timestamp(), "lt" : args.end.timestamp(), "format": "epoch_second"}) \
                     .filter(~Q("terms", JobUniverse=[7, 12])) \
                     .filter("wildcard", **{"ScheddName.keyword": {"value": "*.chtc.wisc.edu"}}) \
                     .extra(size=0) \
@@ -76,7 +76,7 @@ def run_query(client: elasticsearch.Elasticsearch, es_opts: dict, args: argparse
 
     # totals query is exactly the same
     totals = Search(using=client, index=es_opts["es_index"]) \
-                    .filter("range", RecordTime={"gte" : args.start.timestamp(), "lt" : args.end.timestamp()}) \
+                    .filter("range", RecordTime={"gte" : args.start.timestamp(), "lt" : args.end.timestamp(), "format": "epoch_second"}) \
                     .filter(~Q("terms", JobUniverse=[7, 12])) \
                     .filter("wildcard", **{"ScheddName.keyword": {"value": "*.chtc.wisc.edu"}}) \
                     .extra(size=0) \

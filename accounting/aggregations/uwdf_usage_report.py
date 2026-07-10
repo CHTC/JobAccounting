@@ -165,7 +165,7 @@ def get_query(
                 .extra(track_total_hits=True) \
                 .filter("wildcard", TransferInput__keyword="*pelican://chtc.wisc.edu/*") \
                 .filter("range", NumJobStarts={"gt": 0}) \
-                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
 
     runtime_mappings = {
         "runtime_mappings": {

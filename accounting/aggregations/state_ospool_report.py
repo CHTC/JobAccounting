@@ -155,7 +155,7 @@ def get_base_query(
     query = Search(index=index) \
                 .extra(size=0, track_scores=False, track_total_hits=True) \
                 .extra(runtime_mappings=runtime_mappings) \
-                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp())}) \
+                .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("range", RemoteWallClockTime={"gt": 0}) \
                 .query(~Q("terms", JobUniverse=[7, 12])) \
                 .query(IS_OSPOOL_JOB_FILTER) \
