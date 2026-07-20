@@ -876,6 +876,8 @@ class OsgScheddGpuFilter(BaseFilter):
             data["NumVacatesByReason"],
             data["NumShadowStarts"],
         ):
+            if condor_version is None or "." not in condor_version:
+                continue
             cv = tuple(int(x) for x in condor_version.split()[1].split("."))
             if not (qdate >= self.schedd_vacate_reasons_version_qdates.get(schedd, 1e64) or cv >= (24, 11, 1)):
                 continue
