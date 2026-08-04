@@ -165,33 +165,31 @@ class OsgScheddGpuFilter(BaseFilter):
                 pass
         self.logger.debug(f"Querying for QDates per AP where CondorVersion > 24.11.1...")
         t0 = time.time()
-        query = {
+
+        # Step 1: get all distinct CondorVersion values since QDATE_MIN_24_11_1
+        version_query = {
             "size": 0,
-            "runtime_mappings": {
-                "GoodVersion": {
-                    "type": "boolean",
-                    "script": {
-                        "source": r"""
-                        int major = 0;
-                        int minor = 0;
-                        int revision = 0;
-                        int version = 0;
-                        int target = 241101;
-                        Pattern versionPattern = /\$CondorVersion: (\d+)\.(\d+)\.(\d+) .*/;
-                        if (doc.containsKey("CondorVersion") && doc["CondorVersion.keyword"].size() > 0) {
-                            Matcher versionMatcher = versionPattern.matcher(doc["CondorVersion.keyword"].value);
-                            if (versionMatcher.matches()) {
-                            major = Integer.parseInt(versionMatcher.group(1));
-                            minor = Integer.parseInt(versionMatcher.group(2));
-                            revision = Integer.parseInt(versionMatcher.group(3));
-                            version = major * 10000 + minor * 100 + revision;
-                            }
-                        }
-                        emit(version >= target);
-                        """
-                    }
+            "aggs": {
+                "UniqueVersions": {
+                    "terms": {"field": "CondorVersion.keyword", "size": 500}
                 }
             },
+            "query": {"range": {"RecordTime": {"gte": QDATE_MIN_24_11_1}}}
+        }
+        version_result = self.client.search(index=self.index, body=version_query, request_timeout=180)
+
+        # Step 2: filter CondorVersion values to versions >= (24, 11, 1)
+        version_re = re.compile(r'\$CondorVersion: (\d+)\.(\d+)\.(\d+) ')
+        good_versions = []
+        for bucket in version_result["aggregations"]["UniqueVersions"]["buckets"]:
+            m = version_re.search(bucket["key"])
+            if m and (int(m.group(1)), int(m.group(2)), int(m.group(3))) >= (24, 11, 1):
+                good_versions.append(bucket["key"])
+        self.logger.debug(f"Found {len(good_versions)} CondorVersion values >= 24.11.1")
+
+        # Step 3: query for min QDate per schedd from docs containing good CondorVersion values
+        query = {
+            "size": 0,
             "aggs": {
                 "Schedds": {
                     "terms": {
@@ -218,15 +216,15 @@ class OsgScheddGpuFilter(BaseFilter):
                             }
                         },
                         {
-                            "term": {
-                                "GoodVersion": True
+                            "terms": {
+                                "CondorVersion.keyword": good_versions
                             }
                         }
                     ]
                 }
             }
         }
-        result = self.client.search(index=self.index, body=query, request_timeout=300)
+        result = self.client.search(index=self.index, body=query, request_timeout=600)
         self.logger.debug(f"Querying for QDates per AP where CondorVersion > 24.11.1... done after {int(time.time() - t0)} seconds")
         schedd_vacate_reasons_version_qdates = {
             bucket["key"]: int(bucket["FirstQDate"]["value"])
