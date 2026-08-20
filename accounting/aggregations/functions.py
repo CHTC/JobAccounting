@@ -28,6 +28,7 @@ from dns.resolver import query as dns_query
 
 
 OSDF_DIRECTOR_SERVER_URL = "https://osdf-director.osg-htc.org/api/v1.0/director_ui/servers"
+OSDF_REGISTRY_SERVER_URL = "https://osdf-registry.osg-htc.org/api/v1.0/registry_ui/servers"
 UWDF_DIRECTOR_SERVER_URL = "https://uwdf-director.chtc.wisc.edu/api/v1.0/director_ui/servers"
 INSTITUTION_DATABASE_URL = "https://topology-institutions.osg-htc.org/api/institution_ids"
 TOPOLOGY_PROJECT_DATA_URL = "https://topology.opensciencegrid.org/miscproject/xml"
@@ -117,6 +118,75 @@ def get_osdf_director_servers(cache_file=Path("./osdf_director_servers.pickle"))
 
     pickle.dump(osdf_director_servers, cache_file.open("wb"))
     return osdf_director_servers
+
+
+def get_osdf_endpoint_data(cache_file=Path("./osdf_endpoint_data.pickle")) -> dict:
+    """Return a dict mapping OSDF endpoint (host:port) to a data dict.
+
+    Joins director data with registry data via registryPrefix -> registration[].prefix,
+    then enriches with institution name and state from the institution database.
+    """
+    endpoint_map = {}
+
+    # Use cache if less than 20 minutes old
+    if cache_file.exists():
+        try:
+            endpoint_map = pickle.load(cache_file.open("rb"))
+        except Exception:
+            pass
+    if len(endpoint_map) > 0 and cache_file.stat().st_mtime > time.time() - 1200:
+        return endpoint_map
+
+    director_servers = get_osdf_director_servers()
+    institution_db = get_institution_database()
+    topology_resources = get_topology_resource_data()
+
+    registry_prefix_to_institution_id = {}
+    tries = 0
+    max_tries = 5
+    while tries < max_tries:
+        try:
+            with urlopen(OSDF_REGISTRY_SERVER_URL) as f:
+                for entry in json.load(f):
+                    for reg in entry.get("registration", []):
+                        prefix = reg.get("prefix", "")
+                        institution_id = reg.get("admin_metadata", {}).get("institution")
+                        if prefix and institution_id:
+                            registry_prefix_to_institution_id[prefix] = institution_id
+        except HTTPError:
+            time.sleep(2**tries)
+            tries += 1
+            if tries == max_tries:
+                raise
+        else:
+            break
+
+    for url, server in director_servers.items():
+        registry_prefix = server.get("registryPrefix", "")
+        institution_id = registry_prefix_to_institution_id.get(registry_prefix)
+
+        # Fall back to topology resource data keyed by server name
+        if not institution_id:
+            server_name = server.get("name", "")
+            institution_id = topology_resources.get(server_name.lower(), {}).get("institution_id")
+
+        inst = institution_db.get(institution_id, {})
+        lat = server.get("latitude")
+        lon = server.get("longitude")
+        netloc = url.split("//")[-1]
+        endpoint_map[netloc] = {
+            "name": server.get("name") or None,
+            "id": server.get("serverId") or None,
+            "type": server.get("type") or None,
+            "institution": inst.get("name"),
+            "institution_id": institution_id,
+            "latitude": float(lat) if lat is not None else None,
+            "longitude": float(lon) if lon is not None else None,
+            "state": inst.get("state"),
+        }
+
+    pickle.dump(endpoint_map, cache_file.open("wb"))
+    return endpoint_map
 
 
 def get_uwdf_director_servers(cache_file=Path("./uwdf_director_servers.pickle")) -> dict:
