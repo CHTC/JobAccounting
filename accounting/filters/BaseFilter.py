@@ -28,6 +28,7 @@ if (
 
 class BaseFilter:
     name = "job history"
+    allow_early_scan_exit = True
 
     def __init__(self, skip_init=False, **kwargs):
         self.sort_col = "All CPU Hours"
@@ -216,7 +217,7 @@ class BaseFilter:
                     filtr(filtered_data, doc)
 
             # Break early if not finding more results
-            if got_initial_data and not got_index_data:
+            if self.allow_early_scan_exit and got_initial_data and not got_index_data:
                 self.logger.debug(f"Exiting scan early since no docs were found")
                 break
 
