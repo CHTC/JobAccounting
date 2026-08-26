@@ -29,7 +29,6 @@ DEFAULT_FILTER_ATTRS = [
 
 class ChtcScheddDSIGpuFilter(BaseFilter):
     name = "DSI GPU schedd job history"
-    allow_early_scan_exit = False
 
 
     def __init__(self, **kwargs):

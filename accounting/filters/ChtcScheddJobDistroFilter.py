@@ -91,41 +91,32 @@ class ChtcScheddJobDistroFilter(BaseFilter):
             "JobUsages": {}
         }
 
-        # Get list of indices so we can use one at a time
-        indices = list(self.client.indices.get_alias(index=es_index).keys())
-        indices.sort(reverse=True)
-        indices.insert(0, indices.pop())  # make sure the first index gets checked first
-        self.logger.debug(f"Querying at most {len(indices)} indices matching {es_index}.")
-        got_initial_data = False  # only stop after we've seen data
+        query = self.get_query(
+            index=es_index,
+            start_ts=start_ts,
+            end_ts=end_ts,
+        )
 
-        for index in indices:
+        # Get total number of matching docs for progress logging
+        total_hits = self.client.count(
+            index=es_index,
+            body=query.get("body"),
+        )["count"]
+        self.logger.debug(f"Scanning {total_hits} docs matching {es_index}.")
 
-            query = self.get_query(
-                index=index,
-                start_ts=start_ts,
-                end_ts=end_ts,
-            )
+        # Use the scan() helper function, which automatically scrolls results. Nice!
+        for i, doc in enumerate(elasticsearch.helpers.scan(
+                client=self.client,
+                query=query.pop("body"),
+                **query,
+                )):
+            if i > 0 and i % 50_000 == 0:
+                self.logger.debug(f"Processed {i}/{total_hits} docs ({100*i/total_hits:.0f}%)")
 
-            # Use the scan() helper function, which automatically scrolls results. Nice!
-            self.logger.debug(f"Querying {index}.")
-            got_index_data = False
-            for doc in elasticsearch.helpers.scan(
-                    client=self.client,
-                    query=query.pop("body"),
-                    **query,
-                    ):
-                got_initial_data = True
-                got_index_data = True
-
-                # Send the doc through the various filters,
-                # which mutate filtered_data in place
-                for filtr in self.get_filters():
-                    filtr(filtered_data, doc)
-
-            # Break early if not finding more results
-            if got_initial_data and not got_index_data:
-                self.logger.debug(f"Exiting scan early since no docs were found")
-                break
+            # Send the doc through the various filters,
+            # which mutate filtered_data in place
+            for filtr in self.get_filters():
+                filtr(filtered_data, doc)
 
         return filtered_data
 

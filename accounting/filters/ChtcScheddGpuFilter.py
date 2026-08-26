@@ -99,7 +99,6 @@ DEFAULT_FILTER_ATTRS = [
 
 class ChtcScheddGpuFilter(BaseFilter):
     name = "CHTC GPU schedd job history"
-    allow_early_scan_exit = False
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

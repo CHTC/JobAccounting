@@ -134,7 +134,6 @@ QDATE_MIN_24_11_1 = 1754974800  # approx 24.11 rc release
 
 class OsgScheddGpuFilter(BaseFilter):
     name = "OSPool GPU schedd job history"
-    allow_early_scan_exit = False
 
     def __init__(self, **kwargs):
         self.collector_hosts = {"cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"}
