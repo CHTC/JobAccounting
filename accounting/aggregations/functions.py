@@ -14,15 +14,17 @@ from email.mime.base import MIMEBase
 from email.utils import formatdate
 from pathlib import Path
 
-try:
-    import htcondor2 as htcondor
-except ImportError:
-    print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+def _import_htcondor():
     try:
-        import htcondor
+        import htcondor2 as htcondor
     except ImportError:
-        print("Could not import htcondor", file=sys.stderr)
-        htcondor = None
+        print("Could not import from htcondor2, falling back to htcondor", file=sys.stderr)
+        try:
+            import htcondor
+        except ImportError:
+            print("Could not import htcondor", file=sys.stderr)
+            return None
+    return htcondor
 
 from dns.resolver import query as dns_query
 
@@ -452,6 +454,7 @@ def get_ospool_aps(include_jupyter_aps=True, pickled_ap_collector_hosts_cache=No
                 if len(set(collector_hosts) & OSPOOL_COLLECTORS) > 0:
                     cached_aps.add(ap)
     current_ospool_aps = set()
+    htcondor = _import_htcondor()
     if htcondor is None:
         print("Could not import htcondor, not querying APs")
     else:
