@@ -9,7 +9,7 @@ from operator import itemgetter
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from functions import send_email, get_osdf_director_servers, get_topology_resource_data
+from functions import send_email, get_topology_resource_data, get_osdf_endpoint_data
 
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
@@ -59,8 +59,8 @@ JOB_ID_SCRIPT_SRC = """
     emit(job_id.hashCode());
 """
 
-OSDF_DIRECTOR_SERVERS = {}
 TOPOLOGY_RESOURCE_DATA = {}
+OSDF_ENDPOINT_DATA = {}
 
 
 def valid_date(date_str: str) -> datetime:
@@ -216,7 +216,7 @@ def get_endpoint_types(
     endpoints = {bucket["key"]: bucket for bucket in result.aggregations.endpoint.buckets}
     endpoint_types = {"cache": set(), "origin": set()}
     for endpoint, bucket in endpoints.items():
-        endpoint_type = OSDF_DIRECTOR_SERVERS.get(f"https://{endpoint}", {"type": ""}).get("type", "")
+        endpoint_type = OSDF_ENDPOINT_DATA.get(endpoint, {"type": ""}).get("type", "")
         if (
             endpoint_type.lower() == "origin" or
             "origin" in endpoint.split(".")[0] or
@@ -367,8 +367,8 @@ if __name__ == "__main__":
         args.end = args.start + timedelta(days=1)
     days = (args.end - args.start).days
 
-    OSDF_DIRECTOR_SERVERS = get_osdf_director_servers(cache_file=args.cache_dir / "osdf_director_servers.pickle")
     TOPOLOGY_RESOURCE_DATA = get_topology_resource_data(cache_file=args.cache_dir / "topology_resource_data.pickle")
+    OSDF_ENDPOINT_DATA = get_osdf_endpoint_data(cache_file=args.cache_dir / "osdf_endpoint_data.pickle")
 
     es_args["timeout"] = es_args.pop("es_timeout", None)
     if not es_args["timeout"]:
@@ -549,21 +549,14 @@ if __name__ == "__main__":
     endpoint_data = {"download": [], "upload": []}
     for transfer_type, transfer_type_data in all_transfer_type_data.items():
         for endpoint in transfer_type_data["endpoint"]:
-            server_info = OSDF_DIRECTOR_SERVERS.get(f"https://{endpoint}")
-            endpoint_institution = ""
-            if server_info:
-                endpoint_name = server_info.get("name")
-                if endpoint_name:
-                    endpoint_institution = TOPOLOGY_RESOURCE_DATA.get(endpoint_name.lower(), {"institution": f"Unmapped endpoint {endpoint_name}"})["institution"]
-                else:
-                    endpoint_name = "Unnamed endpoint"
-            else:
-                endpoint_name = "Not currently found*"
+            server_info = OSDF_ENDPOINT_DATA.get(endpoint, {})
+            endpoint_name = server_info.get("name", f"{endpoint} not found at director") or f"{endpoint} Not found at director"
+            endpoint_institution = server_info.get("institution", "Not found at registry") or "Not found at registry"
             row = {
                 "endpoint": endpoint,
                 "endpoint_institution": endpoint_institution,
                 "endpoint_name": endpoint_name,
-                "endpoint_type": OSDF_DIRECTOR_SERVERS.get(f"https://{endpoint}", {"type": ""}).get("type", "") or "Cache*",
+                "endpoint_type": server_info.get("type") or "Cache*",
             }
             for attempt_type, attempt_data in {
                 "total_attempts": all_transfer_type_data,
