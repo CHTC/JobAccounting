@@ -196,7 +196,9 @@ def build_top_components_summary(component_totals: dict, totals: dict, total_fai
         top_entries = []
         cumulative = 0
         for key, *_, count in comp_list[:max_components]:
-            if comp in ENDPOINT_SECTIONS:
+            if key is None:
+                display_key = "(unknown)"
+            elif comp in ENDPOINT_SECTIONS:
                 display_key = osdf_endpoint_data.get(key, {}).get("name") or key
             elif comp == "site_endpoint":
                 parts = key.split("..", 1)
@@ -230,7 +232,9 @@ def format_section_data(comp: str, comp_list: list, section_total: int, total_fa
     """Format a component's breakdown into a list of row dicts for rendering."""
     rows = []
     for key, count in comp_list:
-        if comp in ENDPOINT_SECTIONS:
+        if key is None:
+            name = "(unknown)"
+        elif comp in ENDPOINT_SECTIONS:
             name = enrich_endpoint_name(key, osdf_endpoint_data)
         elif comp == "site_endpoint":
             parts = key.split("..", 1)
@@ -344,7 +348,7 @@ def render_html(sections: dict, summary: list, start: datetime, end: datetime, t
             style = "td.text" if fmt == "s" else "td.numeric"
             try:
                 html.append(f'\t\t<td style="{styles["td"]}; {styles[style]}">{row_data[key]:{fmt}}</td>')
-            except ValueError:
+            except (ValueError, TypeError):
                 html.append(f'\t\t<td style="{styles["td"]}">{row_data[key]}</td>')
         html.append("\t</tr>")
     html.append("</table>")
@@ -381,7 +385,7 @@ def render_html(sections: dict, summary: list, start: datetime, end: datetime, t
                 style = "td.text" if fmt == "s" else "td.numeric"
                 try:
                     html.append(f'\t\t<td style="{styles["td"]}; {styles[style]}">{row[key]:{fmt}}</td>')
-                except ValueError:
+                except (ValueError, TypeError):
                     html.append(f'\t\t<td style="{styles["td"]}">{row[key]}</td>')
             html.append("\t</tr>")
         if remaining:
@@ -399,7 +403,7 @@ def render_html(sections: dict, summary: list, start: datetime, end: datetime, t
                 style = "td.text" if fmt == "s" else "td.numeric"
                 try:
                     html.append(f'\t\t<td style="{styles["td"]}; {styles[style]}">{rest_row[key]:{fmt}}</td>')
-                except ValueError:
+                except (ValueError, TypeError):
                     html.append(f'\t\t<td style="{styles["td"]}">{rest_row[key]}</td>')
             html.append("\t</tr>")
         html.append("</table>")
