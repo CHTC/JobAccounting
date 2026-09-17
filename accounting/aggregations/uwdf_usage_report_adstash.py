@@ -1,6 +1,8 @@
+import csv
 import sys
 import json
 import argparse
+import tempfile
 import urllib.request
 
 from operator import itemgetter
@@ -43,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end", type=valid_date)
     parser.add_argument("--project-table", action="store_true")
     parser.add_argument("--namespace-table", action="store_true")
+    parser.add_argument("--attach-project-csv", action="store_true")
 
     return parser.parse_args()
 
@@ -56,48 +59,38 @@ def get_project_query(
 
     time_range = {"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}
 
-    pelican_in_range = Q("bool", minimum_should_match=1, should=[
-        Q("bool", filter=[
-            Q("wildcard", TransferInput="*pelican://chtc.wisc.edu/*"),
-            Q("range", JobCurrentFinishTransferInputDate=time_range),
-            Q("bool", minimum_should_match=1, should=[
-                Q("range", **{"TransferInputStats.PelicanFilesCountLastRun": {"gt": 0}}),
-                Q("range", **{"TransferInputStats.PELICANFilesCountLastRun": {"gt": 0}}),
-            ]),
-        ]),
-        Q("bool", filter=[
-            Q("bool", minimum_should_match=1, should=[
-                Q("wildcard", TransferOutputRemaps="*pelican://chtc.wisc.edu/*"),
-                Q("wildcard", OutputDestination="*pelican://chtc.wisc.edu/*"),
-            ]),
-            Q("range", JobCurrentFinishTransferOutputDate=time_range),
-            Q("bool", minimum_should_match=1, should=[
-                Q("range", **{"TransferOutputStats.PelicanFilesCountLastRun": {"gt": 0}}),
-                Q("range", **{"TransferOutputStats.PELICANFilesCountLastRun": {"gt": 0}}),
-            ]),
-        ]),
+    pelican_uwdf = Q("bool", minimum_should_match=1, should=[
+        Q("wildcard", TransferInput="*pelican://chtc.wisc.edu/*"),
+        Q("wildcard", TransferOutputRemaps="*pelican://chtc.wisc.edu/*"),
+        Q("wildcard", OutputDestination="*pelican://chtc.wisc.edu/*"),
     ])
 
     query = Search(using=client, index=index) \
                 .extra(size=0) \
                 .extra(track_scores=False) \
                 .extra(track_total_hits=True) \
-                .filter(pelican_in_range)
+                .filter("range", RecordTime=time_range) \
+                .filter(pelican_uwdf)
 
     project_agg = A("terms", field="ProjectName", size=512)
-    for direction, date_field in [("Input", "JobCurrentFinishTransferInputDate"), ("Output", "JobCurrentFinishTransferOutputDate")]:
-        dir_filter = A("filter", filter=Q("range", **{date_field: time_range}))
+    for direction in ("Input", "Output"):
         for casing in ("Pelican", "PELICAN", ""):
             prefix = casing if casing else "bare"
-            dir_filter.metric(
-                f"files_{prefix}",
+            project_agg.metric(
+                f"files_{prefix}_{direction.lower()}",
                 A("sum", field=f"Transfer{direction}Stats.{casing}FilesCountLastRun"),
             )
-            dir_filter.metric(
-                f"bytes_{prefix}",
+            project_agg.metric(
+                f"bytes_{prefix}_{direction.lower()}",
                 A("sum", field=f"Transfer{direction}Stats.{casing}SizeBytesLastRun"),
             )
-        project_agg.bucket(direction.lower(), dir_filter)
+
+    rd_filter = Q("bool", minimum_should_match=1, should=[
+        Q("wildcard", TransferInput="*pelican://chtc.wisc.edu/researchdrive/*"),
+        Q("wildcard", TransferOutputRemaps="*pelican://chtc.wisc.edu/researchdrive/*"),
+        Q("wildcard", OutputDestination="*pelican://chtc.wisc.edu/researchdrive/*"),
+    ])
+    project_agg.bucket("rd_usage", A("filter", filter=rd_filter))
 
     query.aggs.bucket("project", project_agg)
 
@@ -210,7 +203,7 @@ def main():
     es.info()
 
     if args.project_table:
-        print(f"{datetime.now()} - Running job history query")
+        print(f"{datetime.now()} - Running job epoch history query")
         project_query = get_project_query(client=es, index=index, start=args.start, end=args.end)
         try:
             project_result = project_query.execute()
@@ -241,28 +234,38 @@ def main():
         data = []
         total = {
             "project": "TOTAL",
-            "jobs": 0,
+            "epochs": 0,
             "files_transferred": 0,
             "gb_transferred": 0,
+            "rd_pct": 0.0,
         }
+        total_rd_epochs = 0
+        total_epochs = 0
         for bucket in project_buckets:
             files = 0
             bytes_total = 0
             for direction in ("input", "output"):
                 for prefix in ("Pelican", "PELICAN", "bare"):
-                    files += bucket.get(direction, {}).get(f"files_{prefix}", {}).get("value", 0)
-                    bytes_total += bucket.get(direction, {}).get(f"bytes_{prefix}", {}).get("value", 0)
+                    files += bucket.get(f"files_{prefix}_{direction}", {}).get("value", 0)
+                    bytes_total += bucket.get(f"bytes_{prefix}_{direction}", {}).get("value", 0)
+            rd_count = bucket.get("rd_usage", {}).get("doc_count", 0)
+            epoch_count = bucket["doc_count"]
+            total_rd_epochs += rd_count
+            total_epochs += epoch_count
             row = {
                 "project": bucket["key"],
-                "jobs": bucket["doc_count"],
+                "epochs": epoch_count,
                 "files_transferred": int(files),
                 "gb_transferred": bytes_total / 1e9,
+                "rd_pct": rd_count / epoch_count if epoch_count > 0 else 0.0,
             }
             for k, v in row.items():
-                if k == "project":
+                if k in ("project", "rd_pct"):
                     continue
                 total[k] += v
-            data.append(row)
+            if files > 0:
+                data.append(row)
+        total["rd_pct"] = total_rd_epochs / total_epochs if total_epochs > 0 else 0.0
         total["project"] = '<span style="font-weight: bold">TOTAL</span>'
         data.sort(key=itemgetter("files_transferred"), reverse=True)
         data.insert(0, total)
@@ -283,11 +286,11 @@ def main():
     html.append("<body>")
 
     if args.project_table:
-        html.append(f"<h1>UWDF usage from CHTC jobs completed {args.start} to {args.end}</h1>")
+        html.append(f"<h1>UWDF usage from CHTC epochs completed {args.start} to {args.end}</h1>")
 
-        cols = ["project", "files_transferred", "gb_transferred", "jobs"]
-        hdrs = ["Project", "Files"            , "GBs"           , "Jobs"]
-        fmts = ["s"      , ",d"               , ",.0f"          , ",d"]
+        cols = ["project", "files_transferred", "gb_transferred", "epochs", "rd_pct"        ]
+        hdrs = ["Project", "Files"            , "GBs"           , "Epochs", r"% Epochs RD"  ]
+        fmts = ["s"      , ",d"               , ",.0f"          , ",d"  , ".1%"          ]
         stys = ["text" if fmt == "s" else "num" for fmt in fmts]
 
         hdrs = dict(zip(cols, hdrs))
@@ -414,18 +417,37 @@ def main():
 
     html.append("</html>")
 
-    send_email(
-        subject=f"{days}-day CHTC UWDF {_report_type(args)} Report {args.start.strftime(r'%Y-%m-%d')} to {args.end.strftime(r'%Y-%m-%d')}",
-        from_addr=args.from_addr,
-        to_addrs=args.to,
-        html="\n".join(html),
-        cc_addrs=args.cc,
-        bcc_addrs=args.bcc,
-        reply_to_addr=args.reply_to,
-        smtp_server=args.smtp_server,
-        smtp_username=args.smtp_username,
-        smtp_password_file=args.smtp_password_file,
-    )
+    attachments = {}
+    csv_tmpfile = None
+    if args.attach_project_csv and args.project_table:
+        csv_cols = ["project", "files_transferred", "gb_transferred", "epochs", "rd_pct"]
+        csv_hdrs = ["Project", "Files", "GBs", "Epochs", "Ratio Epochs RD"]
+        csv_tmpfile = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+        writer = csv.writer(csv_tmpfile)
+        writer.writerow(csv_hdrs)
+        for row in data[1:]:  # skip TOTAL row
+            writer.writerow([row[col] for col in csv_cols])
+        csv_tmpfile.close()
+        csv_name = f"uwdf_projects_{days}day_{args.start.strftime(r'%Y-%m-%d')}.csv"
+        attachments[csv_name] = csv_tmpfile.name
+
+    try:
+        send_email(
+            subject=f"{days}-day CHTC UWDF {_report_type(args)} Report {args.start.strftime(r'%Y-%m-%d')} to {args.end.strftime(r'%Y-%m-%d')}",
+            from_addr=args.from_addr,
+            to_addrs=args.to,
+            html="\n".join(html),
+            cc_addrs=args.cc,
+            bcc_addrs=args.bcc,
+            reply_to_addr=args.reply_to,
+            attachments=attachments,
+            smtp_server=args.smtp_server,
+            smtp_username=args.smtp_username,
+            smtp_password_file=args.smtp_password_file,
+        )
+    finally:
+        if csv_tmpfile is not None:
+            Path(csv_tmpfile.name).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
