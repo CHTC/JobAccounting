@@ -32,15 +32,6 @@ try:
 except ImportError:
     Point = shape = None
 
-try:
-    import htcondor2 as htcondor
-except ImportError:
-    try:
-        import htcondor
-    except ImportError:
-        htcondor = None
-
-
 OSPOOL_COLLECTORS = {"cm-1.ospool.osg-htc.org", "cm-2.ospool.osg-htc.org", "flock.opensciencegrid.org"}
 
 OSPOOL_APS = {
@@ -205,6 +196,13 @@ def get_ospool_aps(include_jupyter_aps: bool = True, pickled_ap_collector_hosts_
             print(f"Could not open {pickled_ap_collector_hosts_cache}, not using CollectorHost cache")
             pass
     current_ospool_aps = set()
+    try:
+        import htcondor2 as htcondor
+    except ImportError:
+        try:
+            import htcondor
+        except ImportError:
+            htcondor = None
     if htcondor is None:
         print("Could not import htcondor, not querying APs")
     else:
