@@ -41,8 +41,8 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--start", type=valid_date)
     parser.add_argument("--end", type=valid_date)
-    parser.add_argument("--skip-project-table", action="store_true")
-    parser.add_argument("--skip-namespace-table", action="store_true")
+    parser.add_argument("--project-table", action="store_true")
+    parser.add_argument("--namespace-table", action="store_true")
 
     return parser.parse_args()
 
@@ -157,6 +157,14 @@ emit(url.substring(piStart, piEnd));
     return query
 
 
+def _report_type(args) -> str:
+    if args.project_table and args.namespace_table:
+        return "Usage"
+    if args.namespace_table:
+        return "Namespace Usage"
+    return "Project Usage"
+
+
 def get_namespace_list() -> list:
     try:
         with urllib.request.urlopen(NAMESPACE_REGISTRY_URL, timeout=10) as response:
@@ -173,9 +181,9 @@ def get_namespace_list() -> list:
 
 def main():
     args = parse_args()
-    if args.skip_project_table and args.skip_namespace_table:
-        print("Skipping both tables!? Ok, then exiting early!")
-        sys.exit()
+    if not args.project_table and not args.namespace_table:
+        print("No tables selected! Use --project-table and/or --namespace-table.")
+        sys.exit(1)
 
     es_args = {}
     if args.es_config_file:
@@ -201,7 +209,7 @@ def main():
     es = connect(**es_args)
     es.info()
 
-    if not args.skip_project_table:
+    if args.project_table:
         print(f"{datetime.now()} - Running job history query")
         project_query = get_project_query(client=es, index=index, start=args.start, end=args.end)
         try:
@@ -215,7 +223,7 @@ def main():
         print(f"{datetime.now()} - Done.")
         project_buckets = project_result.to_dict()["aggregations"]["project"]["buckets"]
 
-    if not args.skip_namespace_table:
+    if args.namespace_table:
         print(f"{datetime.now()} - Running transfer history query")
         endpoint_query = get_endpoint_query(client=es, index=transfer_index, start=args.start, end=args.end, namespaces=namespaces)
         try:
@@ -229,7 +237,7 @@ def main():
         print(f"{datetime.now()} - Done.")
 
 
-    if not args.skip_project_table:
+    if args.project_table:
         data = []
         total = {
             "project": "TOTAL",
@@ -274,7 +282,7 @@ def main():
 
     html.append("<body>")
 
-    if not args.skip_project_table:
+    if args.project_table:
         html.append(f"<h1>UWDF usage from CHTC jobs completed {args.start} to {args.end}</h1>")
 
         cols = ["project", "files_transferred", "gb_transferred", "jobs"]
@@ -302,7 +310,7 @@ def main():
             html.append("\t</tr>")
         html.append("</table>")
 
-    if not args.skip_namespace_table:
+    if args.namespace_table:
         aggs = endpoint_result.to_dict()["aggregations"]
         grand_total = {
             "namespace": '<span style="font-weight: bold">TOTAL</span>',
@@ -407,7 +415,7 @@ def main():
     html.append("</html>")
 
     send_email(
-        subject=f"{(args.end - args.start).days}-day CHTC UWDF Usage Report {args.start.strftime(r'%Y-%m-%d')} to {args.end.strftime(r'%Y-%m-%d')}",
+        subject=f"{days}-day CHTC UWDF {_report_type(args)} Report {args.start.strftime(r'%Y-%m-%d')} to {args.end.strftime(r'%Y-%m-%d')}",
         from_addr=args.from_addr,
         to_addrs=args.to,
         html="\n".join(html),
