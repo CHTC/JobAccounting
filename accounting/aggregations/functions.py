@@ -562,13 +562,16 @@ def send_email(
     msg["Message-ID"] = f"<{subject}-{time.time()}-{from_addr}>".replace(" ", "-").casefold()
     msg["Date"] = formatdate(localtime=True)
 
-    for fname in attachments:
-        fpath = Path(fname)
+    if isinstance(attachments, dict):
+        attachment_items = [(name, Path(path)) for name, path in attachments.items()]
+    else:
+        attachment_items = [(None, Path(fname)) for fname in attachments]
+    for display_name, fpath in attachment_items:
         part = MIMEBase("application", "octet-stream")
         with fpath.open("rb") as f:
             part.set_payload(f.read())
         encoders.encode_base64(part)
-        part.add_header("Content-Disposition", "attachment", filename = fpath.name)
+        part.add_header("Content-Disposition", "attachment", filename=display_name or fpath.name)
         msg.attach(part)
 
     if smtp_server is not None:
