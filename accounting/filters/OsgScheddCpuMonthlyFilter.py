@@ -625,9 +625,12 @@ class OsgScheddCpuMonthlyFilter(BaseFilter):
         row["OSDF Files Xferd"] = data.get("OSDFFiles", "") or ""
         if data.get("OSDFFiles", 0) > 0 and data.get("TotalFiles", 0) > 0:
             row["% OSDF Files"] = 100 * (data["OSDFFiles"] / data["TotalFiles"])
+        else:
+            row["% OSDF Files"] = ""
+        if data.get("OSDFBytes", 0) > 0 and data.get("TotalBytes", 0) > 0:
             row["% OSDF Bytes"] = 100 * (data["OSDFBytes"] / data["TotalBytes"])
         else:
-            row["% OSDF Files"] = row["% OSDF Bytes"] = ""
+            row["% OSDF Bytes"] = ""
 
         # Compute derivative columns
         if row["All CPU Hours"] > 0:
