@@ -90,8 +90,8 @@ def get_endpoint_types(
                 .filter("terms", TransferProtocol=["osdf", "pelican"]) \
                 .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("exists", field="Endpoint") \
-                .query(~Q("term", Endpoint="")) \
-                .query(Q("wildcard", TransferUrl="*osdf://*") | Q("wildcard", TransferUrl="*pelican://osg-htc.org*"))
+                .filter(~Q("term", Endpoint="")) \
+                .filter(Q("wildcard", TransferUrl="*osdf://*") | Q("wildcard", TransferUrl="*pelican://osg-htc.org*"))
 
     if transfer_type:
         query = query.filter("term", TransferType=transfer_type)
@@ -155,15 +155,15 @@ def get_query(
                 .extra(track_total_hits=True) \
                 .filter("range", RecordTime={"gte": int(start.timestamp()), "lt": int(end.timestamp()), "format": "epoch_second"}) \
                 .filter("terms", TransferProtocol=["osdf", "pelican"]) \
-                .filter("term", TransferSuccess=False) \
-                .query(Q("wildcard", TransferUrl="*osdf://*") | Q("wildcard", TransferUrl="*pelican://osg-htc.org*"))
+                .filter(Q("term", TransferSuccess=False) | Q("term", FinalAttempt=False)) \
+                .filter(Q("wildcard", TransferUrl="*osdf://*") | Q("wildcard", TransferUrl="*pelican://osg-htc.org*"))
 
     if transfer_type:
         query = query.filter("term", TransferType=transfer_type)
 
     # filter out jobs that did not run in the OSPool
     has_resource_name = Q("exists", field="machineattrglidein_resourcename0") & ~Q("terms", machineattrglidein_resourcename0=["Undefined", "2"])
-    query = query.query(has_resource_name)
+    query = query.filter(has_resource_name)
 
     director404_agg = A("filter", filter=~Q("exists", field="Endpoint"))
     origin_agg = A("terms", field="Endpoint", size=len(endpoint_types["origin"]) or 1, include=list(endpoint_types["origin"]))
