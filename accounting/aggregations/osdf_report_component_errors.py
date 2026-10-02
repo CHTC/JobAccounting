@@ -2,6 +2,7 @@ import sys
 import time
 import json
 import argparse
+import urllib.request
 
 from operator import itemgetter
 from datetime import datetime, timedelta
@@ -18,27 +19,30 @@ from elasticsearch_dsl import Search, A, Q
 ENDPOINT_SECTIONS = {"cache", "origin", "cache-hits", "cache-misses"}
 
 INPUT_COMPONENTS = [
-    "cache", "origin", "institution", "director404",
-    "site", "owner", "ap", "error_type",
-    "site_endpoint", "cache-hits", "cache-misses",
+    "cache", "origin", "institution", "namespace", "director404",
+    "site", "owner", "project", "ap", "error_type",
+    "site_endpoint", "endpoint_namespace", "cache-hits", "cache-misses",
 ]
 
 OUTPUT_COMPONENTS = [
-    "origin", "institution", "director404",
-    "site", "owner", "ap", "error_type",
-    "site_endpoint",
+    "origin", "institution", "namespace", "director404",
+    "site", "owner", "project", "ap", "error_type",
+    "site_endpoint", "endpoint_namespace",
 ]
 
 INPUT_DISPLAY_NAMES = {
     "cache": "Source Cache",
     "origin": "Source Origin",
     "institution": "Source Institution",
+    "namespace": "Namespace",
     "director404": "Director/404",
     "site": "Target Site",
     "owner": "Owner",
+    "project": "Project",
     "ap": "AP",
     "error_type": "Error Type",
     "site_endpoint": "(Source, Target)",
+    "endpoint_namespace": "(Source, Namespace)",
     "cache-hits": "Cache (Hits)",
     "cache-misses": "Cache (Misses)",
 }
@@ -46,13 +50,19 @@ INPUT_DISPLAY_NAMES = {
 OUTPUT_DISPLAY_NAMES = {
     "origin": "Target Origin",
     "institution": "Target Institution",
+    "namespace": "Namespace",
     "director404": "Director/404",
     "site": "Source Site",
     "owner": "Owner",
+    "project": "Project",
     "ap": "AP",
     "error_type": "Error Type",
     "site_endpoint": "(Source, Target)",
+    "endpoint_namespace": "(Target, Namespace)",
 }
+
+NAMESPACE_REGISTRY_URL = "https://osdf-registry.osg-htc.org/api/v1.0/registry_ui/namespaces"
+NAMESPACE_CACHE_FILE = Path(__file__).parent / "osdf_namespaces.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -140,6 +150,50 @@ def get_endpoint_types(
     return endpoint_types
 
 
+def get_namespace_list(cache_file: Path = NAMESPACE_CACHE_FILE) -> list:
+    try:
+        with urllib.request.urlopen(NAMESPACE_REGISTRY_URL, timeout=10) as response:
+            data = json.loads(response.read())
+        namespaces = [
+            entry["prefix"] for entry in data
+            if not entry["prefix"].startswith(("/caches/", "/origins/"))
+        ]
+        cache_file.write_text(json.dumps(namespaces))
+        return namespaces
+    except Exception:
+        return json.loads(cache_file.read_text())
+
+
+def build_namespace_script(namespaces: list) -> str:
+    # Sort longest-first for correct prefix matching
+    sorted_ns = sorted(namespaces, key=len, reverse=True)
+    # TransferUrl is either osdf://[/]{ns}/... or pelican://osg-htc.org/{ns}/...
+    # For pelican, the namespace path starts after the third "/" (skip the host).
+    # For osdf, the client is lenient about slash count (2-4 seen in practice),
+    # so strip all slashes after "://" and prepend a single "/".
+    # Result is always /{ns}/... matching the registry prefix format.
+    lines = [
+        "String url = doc['TransferUrl'].value;",
+        "int protoIdx = url.indexOf('://');",
+        "if (protoIdx < 0) { emit('UNKNOWN'); return; }",
+        "String rest = url.substring(protoIdx + 3);",
+        "String path;",
+        "if (doc['TransferProtocol'].value == 'pelican') {",
+        "  int slashIdx = rest.indexOf('/');",
+        "  if (slashIdx < 0) { emit('UNKNOWN'); return; }",
+        "  path = rest.substring(slashIdx);",
+        "} else {",
+        "  while (rest.startsWith('/')) { rest = rest.substring(1); }",
+        "  path = '/' + rest;",
+        "}",
+    ]
+    for ns in sorted_ns:
+        escaped = ns.replace("'", "\\'")
+        lines.append(f"if (path.startsWith('{escaped}/')) {{ emit('{escaped}'); return; }}")
+    lines.append("emit('UNKNOWN');")
+    return "\n".join(lines)
+
+
 def get_query(
         client: elasticsearch.Elasticsearch,
         index: str,
@@ -147,6 +201,7 @@ def get_query(
         end: datetime,
         endpoint_types: dict,
         transfer_type: str = None,
+        namespaces: list = None,
     ) -> Search:
 
     query = Search(using=client, index=index) \
@@ -169,6 +224,7 @@ def get_query(
     origin_agg = A("terms", field="Endpoint", size=len(endpoint_types["origin"]) or 1, include=list(endpoint_types["origin"]))
     site_agg = A("terms", field="machineattrglidein_site0", size=256)
     owner_agg = A("terms", field="Owner", size=128, missing="Undefined")
+    project_agg = A("terms", field="ProjectName", size=512, missing="Undefined")
     ap_agg = A("terms", field="ScheddName", size=128)
     error_type_agg = A("terms", field="ErrorType", size=128, missing="Undefined")
 
@@ -186,9 +242,20 @@ def get_query(
     query.aggs.bucket("origin", origin_agg)
     query.aggs.bucket("site", site_agg)
     query.aggs.bucket("owner", owner_agg)
+    query.aggs.bucket("project", project_agg)
     query.aggs.bucket("ap", ap_agg)
     query.aggs.bucket("director404", director404_agg)
     query.aggs.bucket("error_type", error_type_agg)
+
+    if namespaces:
+        ns_script = build_namespace_script(namespaces)
+        query.update_from_dict({"runtime_mappings": {
+            "namespace": {"type": "keyword", "script": {"source": ns_script}},
+        }})
+        query.aggs.bucket("namespace", A("terms", field="namespace", size=len(namespaces) + 1))
+        endpoint_ns_agg = A("terms", field="Endpoint", size=128)
+        endpoint_ns_agg.bucket("namespace", A("terms", field="namespace", size=len(namespaces) + 1))
+        query.aggs.bucket("endpoint_namespace", endpoint_ns_agg)
 
     return query
 
@@ -231,6 +298,10 @@ def build_top_components_summary(component_totals: dict, totals: dict, total_fai
                     display_key = f"({parts[0]}, {ep_name})" if len(parts) == 2 else key
                 else:
                     display_key = f"({ep_name}, {parts[0]})" if len(parts) == 2 else key
+            elif comp == "endpoint_namespace":
+                parts = key.split("..", 1)
+                ep_name = osdf_endpoint_data.get(parts[0], {}).get("name") or parts[0] if len(parts) == 2 else key
+                display_key = f"({ep_name}, {parts[1]})" if len(parts) == 2 else key
             else:
                 display_key = key
             top_entries.append((display_key, count, count / section_total if section_total > 0 else 0))
@@ -279,6 +350,13 @@ def format_section_data(comp: str, comp_list: list, section_total: int, total_fa
                     name = f"({enriched}, {parts[0]})"
             else:
                 name = key
+        elif comp == "endpoint_namespace":
+            parts = key.split("..", 1)
+            if len(parts) == 2:
+                enriched = enrich_endpoint_name(parts[0], osdf_endpoint_data)
+                name = f"({enriched}, {parts[1]})"
+            else:
+                name = key
         else:
             name = key
         rows.append({
@@ -309,6 +387,7 @@ def process_direction(
         transfer_type: str,
         display_names: dict,
         components: list,
+        namespaces: list = None,
     ) -> dict:
     """Run query and build summary/sections for one transfer direction."""
 
@@ -328,6 +407,7 @@ def process_direction(
         end=end,
         endpoint_types=endpoint_types,
         transfer_type=transfer_type,
+        namespaces=namespaces if "namespace" in components else None,
     )
 
     try:
@@ -346,6 +426,7 @@ def process_direction(
         "director404": result.aggregations.director404.doc_count,
         "site": sum(bucket.doc_count for bucket in result.aggregations.site.buckets),
         "owner": sum(bucket.doc_count for bucket in result.aggregations.owner.buckets),
+        "project": sum(bucket.doc_count for bucket in result.aggregations.project.buckets),
         "ap": sum(bucket.doc_count for bucket in result.aggregations.ap.buckets),
         "error_type": sum(bucket.doc_count for bucket in result.aggregations.error_type.buckets),
     }
@@ -356,6 +437,7 @@ def process_direction(
         "director404": [(b.key, b.doc_count) for b in result.aggregations.director404.debug_error_type.buckets],
         "site":        [(b.key, b.doc_count) for b in result.aggregations.site.buckets],
         "owner":       [(b.key, b.doc_count) for b in result.aggregations.owner.buckets],
+        "project":     [(b.key, b.doc_count) for b in result.aggregations.project.buckets],
         "ap":          [(b.key, b.doc_count) for b in result.aggregations.ap.buckets],
         "error_type":  [(b.key, b.doc_count) for b in result.aggregations.error_type.buckets],
         "site_endpoint": [
@@ -398,6 +480,18 @@ def process_direction(
             for hit_bucket in cache_bucket.hit_or_miss.buckets
             if hit_bucket.key_as_string == "true"
         ]
+
+    if namespaces and "namespace" in components:
+        totals["namespace"] = sum(bucket.doc_count for bucket in result.aggregations.namespace.buckets)
+        component_totals["namespace"] = [(b.key, b.doc_count) for b in result.aggregations.namespace.buckets]
+
+    if namespaces and "endpoint_namespace" in components:
+        component_totals["endpoint_namespace"] = [
+            (f"{ep_bucket.key}..{ns_bucket.key}", ns_bucket.doc_count)
+            for ep_bucket in result.aggregations.endpoint_namespace.buckets
+            for ns_bucket in ep_bucket.namespace.buckets
+        ]
+        totals["endpoint_namespace"] = sum(bucket.doc_count for bucket in result.aggregations.endpoint_namespace.buckets)
 
     # Institution-level rollup
     institution_totals = {}
@@ -674,6 +768,7 @@ def main():
     days = (args.end - args.start).days
 
     osdf_endpoint_data = get_osdf_endpoint_data(cache_file=args.cache_dir / "osdf_endpoint_data.pickle")
+    namespaces = get_namespace_list(cache_file=args.cache_dir / "osdf_namespaces.json")
     error_codes = load_pelican_error_codes(args.pelican_error_codes)
 
     if not es_args.get("es_timeout"):
@@ -688,6 +783,7 @@ def main():
         transfer_type="download",
         display_names=INPUT_DISPLAY_NAMES,
         components=INPUT_COMPONENTS,
+        namespaces=namespaces,
     )
     input_result["label"] = "Input Transfers"
     direction_results.append(input_result)
@@ -697,6 +793,7 @@ def main():
         transfer_type="upload",
         display_names=OUTPUT_DISPLAY_NAMES,
         components=OUTPUT_COMPONENTS,
+        namespaces=namespaces,
     )
     output_result["label"] = "Output Transfers"
     direction_results.append(output_result)
